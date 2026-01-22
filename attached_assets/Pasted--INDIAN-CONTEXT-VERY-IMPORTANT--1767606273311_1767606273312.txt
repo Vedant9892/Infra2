@@ -1,0 +1,123 @@
+====================================================
+INDIAN CONTEXT (VERY IMPORTANT)
+====================================================
+The app is built for INDIAN construction sites.
+
+Use ONLY Indian names, locations, and context.
+
+EXAMPLES:
+• Names: Ramesh Patil, Suresh Yadav, Anjali Sharma, Rohit Deshmukh, Pooja Verma
+• Locations: Mumbai, Pune, Thane, Navi Mumbai
+• Language tone: Simple, respectful, practical
+
+DO NOT use foreign names like Sandra, Tiffany, Copenhagen, etc.
+
+====================================================
+MULTILINGUAL SUPPORT (HACKATHON WOW FACTOR)
+====================================================
+Add multilingual support for Indian languages:
+
+Supported languages:
+• English
+• Hindi (हिंदी)
+• Marathi (मराठी)
+• Gujarati (ગુજરાતી)
+• Tamil (தமிழ்) [optional]
+
+IMPLEMENTATION:
+• Language selector on login screen
+• Icon + language name
+• Persist selected language across app
+• Labour-facing UI uses:
+  - Short sentences
+  - Icons + text
+  - Clear action words
+
+EXAMPLE:
+“Mark Attendance”
+→
+• English: Mark Attendance
+• Hindi: हाजिरी लगाएं
+• Marathi: हजेरी नोंदवा
+
+====================================================
+LOGIN & ROLE SELECTION (VERY IMPORTANT FOR PPT + DEMO)
+====================================================
+Create a BEAUTIFUL, PREMIUM login experience using the SAME aesthetic as the reference UI.
+
+----------------------------------------------------
+LOGIN LANDING SCREEN (PPT-FRIENDLY)
+----------------------------------------------------
+This screen must look AMAZING on PPT.
+
+FEATURES:
+• Soft gradient background
+• App logo + name
+• Tagline:
+  “Digitising Indian Construction Sites”
+
+• Large rounded role cards (tap to select):
+  1. Labour
+  2. Site Supervisor
+  3. Engineer
+  4. Site Owner
+
+• Each role card:
+  - Icon illustration
+  - Short description
+  - Pastel background
+  - Rounded corners
+  - Soft shadow
+
+----------------------------------------------------
+ROLE-BASED LOGIN SCREEN
+----------------------------------------------------
+After role selection:
+
+• Phone number login (India-style)
+• OTP-based authentication UI (mock allowed)
+• Large rounded input fields
+• Soft primary CTA button
+• Language selector visible on top
+
+----------------------------------------------------
+LOGIN AESTHETIC RULES
+----------------------------------------------------
+• SAME card style as home screen
+• SAME spacing & shadows
+• Rounded input fields
+• No boring forms
+• No plain white screens
+• Looks like a CONSUMER APP, not government software
+
+====================================================
+POST-LOGIN FLOW
+====================================================
+After login:
+• Labour → Labour Home Dashboard
+• Supervisor → Supervisor Dashboard
+• Engineer → Engineer Dashboard
+• Owner → Owner Dashboard
+
+Smooth animated transition between screens.
+
+====================================================
+HACKATHON JURY IMPRESSION GOALS
+====================================================
+Judges should immediately notice:
+• “They designed for Indian users”
+• “Multilingual labour-friendly UI”
+• “Realistic login & role flow”
+• “Production-ready thinking”
+
+====================================================
+FINAL EXPECTATION
+====================================================
+Generate:
+• Login landing screen UI
+• Role selection UI
+• Multilingual text structure
+• Clean, deployable React Native code
+• Same premium aesthetic as reference image
+
+If the login screen does not look PPT-worthy, IMPROVE IT.

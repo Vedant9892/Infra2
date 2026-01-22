@@ -1,0 +1,170 @@
+You are an elite product designer + full-stack engineer who builds NATIONAL-LEVEL HACKATHON WINNERS.
+
+Your task is to build a Construction Field Management Mobile App (InfraTrace-style) using the EXACT UI DESIGN provided in the reference image.
+
+====================================================
+ABSOLUTE RULE (VERY IMPORTANT)
+====================================================
+RECREATE THE UI EXACTLY AS SHOWN IN THE IMAGE.
+
+• Same layout
+• Same card sizes
+• Same spacing
+• Same rounded corners
+• Same shadows
+• Same color softness
+• Same typography scale
+• Same bottom navigation style
+
+DO NOT redesign.
+DO NOT simplify.
+DO NOT change layout.
+The app must look visually INDISTINGUISHABLE from the reference UI.
+
+Only change the CONTENT to match a Construction Field Management App.
+
+====================================================
+TECH STACK (STRICT)
+====================================================
+• Mobile: React Native (Expo)
+• Production-ready code
+• Functional components
+• Clean folder structure
+
+====================================================
+DESIGN SYSTEM (MATCH IMAGE)
+====================================================
+Background: #F5F3FF  
+Primary Purple: #6C63FF  
+Soft Yellow: #FFD166  
+Soft Blue: #BEE7E8  
+Soft Pink: #F6C1CC  
+Dark Text: #1C1C1E  
+Muted Text: #6E6E73  
+Bottom Nav: #111111  
+
+• Card radius: 24–28px  
+• Shadows: soft, wide, low opacity  
+• No borders  
+• Lots of white space  
+
+Typography:
+• Inter / SF Pro
+• Headings bold
+• Body relaxed
+• Numbers slightly heavier
+
+====================================================
+HOME SCREEN (MATCH IMAGE 1:1)
+====================================================
+STRUCTURE (DO NOT CHANGE):
+
+1. Header
+   • Circular profile image (left)
+   • Greeting text (small)
+   • Name (bold)
+   • Search icon in circular container (right)
+
+2. HERO CARD (Top Purple Card)
+   (This replaces “Daily Challenge”)
+
+   • Title: “Mark Attendance”
+   • Subtitle: “GPS • Time • Live Photo Required”
+   • Large rounded gradient card
+   • Abstract / 3D illustration on right
+   • Sync status badge: Offline / Synced
+
+3. Horizontal Date Strip
+   • Circular date pills
+   • Selected date filled
+   • Others outlined
+
+4. “Your Tasks” Section
+   • Left: One large vertical card
+   • Right: Two smaller stacked cards
+
+   Each card contains:
+   • Task name
+   • Time
+   • Location
+   • Supervisor avatar
+   • Status pill (Pending / Completed)
+
+5. Bottom Navigation
+   • Floating rounded bar
+   • Dark background
+   • White icons
+   • Center tab highlighted
+
+====================================================
+PROFILE SCREEN (MATCH IMAGE)
+====================================================
+• Large circular avatar
+• Name & location
+• 3 stat cards:
+  - Attendance %
+  - Hours Worked
+  - Tasks Completed
+
+• Rounded list items (no dividers):
+  - Work History
+  - Reports
+  - Equipment
+  - Settings
+
+====================================================
+DETAIL SCREEN (MATCH IMAGE)
+====================================================
+• Full-width image header
+• Content slides up as rounded white sheet
+• Task details
+• Info pills
+• Primary CTA button (gradient)
+
+====================================================
+HACKATHON-WINNING FEATURES (CRITICAL)
+====================================================
+1. LIVE VERIFIED ATTENDANCE
+   • GPS locked
+   • Timestamp locked
+   • Live camera only (no gallery)
+   • Offline save + sync animation
+
+2. OFFLINE-FIRST DEMO MAGIC
+   • Visual “Offline” badge
+   • Toggle internet → show auto sync
+   • Judges must SEE data syncing
+
+3. ROLE-BASED FLOW (MENTION IN UI COPY)
+   • Labour → Supervisor → Engineer → Owner
+
+4. DEMO MODE
+   • Auto-filled realistic data
+   • Instant approvals
+   • Smooth demo without internet
+
+====================================================
+ANIMATIONS & POLISH
+====================================================
+• Card press scale animation
+• Smooth screen transitions
+• Skeleton loaders
+• Empty states with illustrations
+• Subtle haptic feedback
+
+====================================================
+FINAL OUTPUT EXPECTATION
+====================================================
+Generate:
+• Complete React Native screens
+• Reusable Card, Button, Header components
+• Bottom navigation
+• Color & spacing constants
+• Production-ready UI
+
+THIS MUST LOOK LIKE:
+• A funded startup MVP
+• A top-3 hackathon project
+• A real deployable product
+
+If anything looks less premium than the reference image, IMPROVE IT.
