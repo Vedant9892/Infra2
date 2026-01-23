@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet } from 'react-native';
 import { API_BASE_URL } from '../../constants/api';
+import { supabase } from '../../constants/supabase';
 
 
 export default function SetupProfile() {
@@ -68,57 +69,90 @@ export default function SetupProfile() {
     return true;
   };
 
-  const handleSaveProfile = async () => {
-    if (!validateForm()) return;
-    if (!userId) {
-      Alert.alert('Error', 'User ID not found');
+ const handleSaveProfile = async () => {
+  if (!validateForm()) return;
+  if (!userId) {
+    Alert.alert('Error', 'User ID not found');
+    return;
+  }
+
+  setLoading(true);
+  try {
+    console.log('📤 Uploading image to Supabase...');
+    
+    // Generate unique filename
+    const fileExt = profileImage!.split('.').pop() || 'jpg';
+    const fileName = `${userId}-${Date.now()}.${fileExt}`;
+    const filePath = `profiles/${fileName}`;
+
+    // For React Native, we need to use FormData or ArrayBuffer
+    // Convert base64 to ArrayBuffer
+    const base64Data = profileImageBase64!.split(',')[1]; // Remove data:image/jpeg;base64,
+    const byteCharacters = atob(base64Data);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+
+    // Upload to Supabase
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('profile-photos')
+      .upload(filePath, byteArray, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('❌ Upload error:', uploadError);
+      Alert.alert('Error', `Failed to upload image: ${uploadError.message}`);
       return;
     }
 
-    setLoading(true);
-    try {
-      const payload = {
-        userId,
-        name: name.trim(),
-        profilePhoto: profileImageBase64,
-      };
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('profile-photos')
+      .getPublicUrl(filePath);
 
-      console.log('📤 Sending profile data to backend...');
-      console.log('User ID:', userId);
-      
-      const response = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    console.log('✅ Image uploaded:', publicUrl);
+
+    // Save to MongoDB
+    const payload = {
+      userId,
+      name: name.trim(),
+      profilePhoto: publicUrl,
+    };
+
+    console.log('📤 Saving profile to backend...');
+    
+    const apiResponse = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await apiResponse.json();
+
+    if (apiResponse.ok && data.success) {
+      console.log('✓ Profile saved successfully');
+      Alert.alert('Success', 'Profile setup completed!', [
+        {
+          text: 'OK',
+          onPress: () => router.replace('/(tabs)/home'),
         },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        console.log('✓ Profile saved successfully:', data.user);
-        Alert.alert('Success', 'Profile setup completed!', [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('🚀 Navigating to Dashboard');
-              router.replace('/(tabs)/home');
-            },
-          },
-        ]);
-      } else {
-        console.log('✗ Profile save failed:', data.message);
-        Alert.alert('Error', data.message || 'Failed to save profile');
-      }
-    } catch (error) {
-      console.log('✗ Error saving profile:', error);
-      Alert.alert('Error', 'Failed to save profile. Check your connection.');
-    } finally {
-      setLoading(false);
+      ]);
+    } else {
+      Alert.alert('Error', data.message || 'Failed to save profile');
     }
-  };
-
+  } catch (error: any) {
+    console.error('✗ Error saving profile:', error);
+    Alert.alert('Error', error.message || 'Failed to save profile');
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <KeyboardAvoidingView 
       style={styles.container}
