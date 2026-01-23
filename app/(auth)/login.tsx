@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useUser } from '../../contexts/UserContext';
 import { API_BASE_URL } from '../../constants/api';
+import { DESIGN } from '../../constants/designSystem';
 
 type Role = 'labour' | 'supervisor' | 'engineer' | 'owner';
 
@@ -119,10 +120,12 @@ export default function LoginScreen() {
             onPress={() => setShowLanguageModal(false)}
             style={styles.closeButton}
           >
-            <Ionicons name="close" size={28} color="#111" />
+            <Ionicons name="close" size={28} color={DESIGN.colors.text.primary} />
           </TouchableOpacity>
 
-          <Text style={styles.modalTitle}>{t('login.selectLanguage')}</Text>
+          <Text style={styles.modalTitle} allowFontScaling={false}>
+            {t('login.selectLanguage')}
+          </Text>
 
           {languages.map((lang) => (
             <TouchableOpacity
@@ -142,11 +145,12 @@ export default function LoginScreen() {
                   styles.languageName,
                   language === lang.code && styles.languageNameActive,
                 ]}
+                allowFontScaling={false}
               >
                 {lang.name}
               </Text>
               {language === lang.code && (
-                <Ionicons name="checkmark-circle" size={24} color="#8B5CF6" />
+                <Ionicons name="checkmark-circle" size={24} color={DESIGN.colors.primary} />
               )}
             </TouchableOpacity>
           ))}
@@ -161,14 +165,20 @@ export default function LoginScreen() {
         <StatusBar style="dark" />
         <ScrollView contentContainerStyle={styles.content}>
           <TouchableOpacity onPress={() => setShowOtpScreen(false)} style={styles.back}>
-            <Ionicons name="arrow-back" size={24} color="#8B5CF6" />
-            <Text style={styles.backText}>Back</Text>
+            <Ionicons name="arrow-back" size={24} color={DESIGN.colors.primary} />
+            <Text style={styles.backText} allowFontScaling={false}>
+              Back
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
             <Text style={styles.emoji}>🔐</Text>
-            <Text style={styles.title}>Verify OTP</Text>
-            <Text style={styles.subtitle}>Enter the 6-digit code sent to +91 {phoneNumber}</Text>
+            <Text style={styles.title} allowFontScaling={false}>
+              Verify OTP
+            </Text>
+            <Text style={styles.subtitle} allowFontScaling={false}>
+              Enter the 6-digit code sent to +91 {phoneNumber}
+            </Text>
           </View>
 
           <View style={styles.otpContainer}>
@@ -181,6 +191,7 @@ export default function LoginScreen() {
                 maxLength={1}
                 style={styles.otpInput}
                 autoFocus={index === 0}
+                allowFontScaling={false}
               />
             ))}
           </View>
@@ -190,11 +201,15 @@ export default function LoginScreen() {
             onPress={handleVerifyOtp}
             disabled={!otp.every(d => d !== '')}
           >
-            <Text style={styles.buttonText}>Verify & Continue</Text>
+            <Text style={styles.buttonText} allowFontScaling={false}>
+              Verify & Continue
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleSendOtp} style={styles.resendButton}>
-            <Text style={styles.resendText}>Resend OTP</Text>
+            <Text style={styles.resendText} allowFontScaling={false}>
+              Resend OTP
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -210,27 +225,37 @@ export default function LoginScreen() {
             style={styles.languageButton}
             onPress={() => setShowLanguageModal(true)}
           >
-            <Ionicons name="language" size={24} color="#8B5CF6" />
-            <Text style={styles.languageButtonText}>
+            <Ionicons name="language" size={20} color={DESIGN.colors.primary} />
+            <Text style={styles.languageButtonText} allowFontScaling={false}>
               {languages.find((l) => l.code === language)?.name}
             </Text>
           </TouchableOpacity>
 
           <View style={styles.header}>
             <Text style={styles.emoji}>🏗️</Text>
-            <Text style={styles.title}>InfraTrace</Text>
-            <Text style={styles.subtitle}>Digitising Indian Construction Sites</Text>
+            <Text style={styles.title} allowFontScaling={false}>
+              InfraTrace
+            </Text>
+            <Text style={styles.subtitle} allowFontScaling={false}>
+              Digitising Indian Construction Sites
+            </Text>
           </View>
 
-          <Text style={styles.sectionTitle}>{t('login.selectRole')}</Text>
+          <Text style={styles.sectionTitle} allowFontScaling={false}>
+            {t('login.selectRole')}
+          </Text>
 
           <TouchableOpacity
             style={[styles.roleCard, { backgroundColor: '#BEE7E8' }]}
             onPress={() => setSelectedRole('labour')}
           >
             <Text style={styles.roleEmoji}>👷</Text>
-            <Text style={styles.roleTitle}>{t('login.labour')}</Text>
-            <Text style={styles.roleDesc}>Daily attendance & task tracking</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.labour')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Daily attendance & task tracking
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -238,8 +263,12 @@ export default function LoginScreen() {
             onPress={() => setSelectedRole('supervisor')}
           >
             <Text style={styles.roleEmoji}>👨‍💼</Text>
-            <Text style={styles.roleTitle}>{t('login.supervisor')}</Text>
-            <Text style={styles.roleDesc}>Manage teams & approve tasks</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.supervisor')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Manage teams & approve tasks
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -247,8 +276,12 @@ export default function LoginScreen() {
             onPress={() => setSelectedRole('engineer')}
           >
             <Text style={styles.roleEmoji}>👨‍🔧</Text>
-            <Text style={styles.roleTitle}>{t('login.engineer')}</Text>
-            <Text style={styles.roleDesc}>Technical oversight & planning</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.engineer')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Technical oversight & planning
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -256,8 +289,12 @@ export default function LoginScreen() {
             onPress={() => setSelectedRole('owner')}
           >
             <Text style={styles.roleEmoji}>👔</Text>
-            <Text style={styles.roleTitle}>{t('login.owner')}</Text>
-            <Text style={styles.roleDesc}>Full site analytics & control</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.owner')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Full site analytics & control
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -269,20 +306,30 @@ export default function LoginScreen() {
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.content}>
         <TouchableOpacity onPress={() => setSelectedRole(null)} style={styles.back}>
-          <Ionicons name="arrow-back" size={24} color="#8B5CF6" />
-          <Text style={styles.backText}>Back</Text>
+          <Ionicons name="arrow-back" size={24} color={DESIGN.colors.primary} />
+          <Text style={styles.backText} allowFontScaling={false}>
+            Back
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.header}>
           <Text style={styles.emoji}>📱</Text>
-          <Text style={styles.title}>{t('login.title')}</Text>
-          <Text style={styles.subtitle}>We'll send you an OTP to verify</Text>
+          <Text style={styles.title} allowFontScaling={false}>
+            {t('login.title')}
+          </Text>
+          <Text style={styles.subtitle} allowFontScaling={false}>
+            We'll send you an OTP to verify
+          </Text>
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>{t('login.phoneNumber')}</Text>
+          <Text style={styles.label} allowFontScaling={false}>
+            {t('login.phoneNumber')}
+          </Text>
           <View style={styles.phoneInput}>
-            <Text style={styles.prefix}>+91</Text>
+            <Text style={styles.prefix} allowFontScaling={false}>
+              +91
+            </Text>
             <TextInput
               value={phoneNumber}
               onChangeText={setPhoneNumber}
@@ -290,7 +337,8 @@ export default function LoginScreen() {
               keyboardType="phone-pad"
               maxLength={10}
               style={styles.input}
-              placeholderTextColor="#999"
+              placeholderTextColor={DESIGN.colors.text.tertiary}
+              allowFontScaling={false}
             />
           </View>
         </View>
@@ -300,171 +348,176 @@ export default function LoginScreen() {
           onPress={handleSendOtp}
           disabled={phoneNumber.length !== 10}
         >
-          <Text style={styles.buttonText}>Send OTP</Text>
+          <Text style={styles.buttonText} allowFontScaling={false}>
+            Send OTP
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F5F3FF',
   },
   content: {
-    padding: 24,
-    paddingTop: 60,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingTop: DESIGN.spacing.xl * 2,
+    paddingBottom: DESIGN.spacing.xl,
   },
   languageButton: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    backgroundColor: DESIGN.colors.surface,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingVertical: DESIGN.spacing.sm,
     borderRadius: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    marginBottom: DESIGN.spacing.xl,
+    ...DESIGN.shadow.sm,
     elevation: 3,
   },
   languageButtonText: {
-    fontSize: 14,
-    color: '#8B5CF6',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.primary,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: DESIGN.spacing.sm,
   },
   modalContent: {
     flex: 1,
-    padding: 24,
-    paddingTop: 60,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingTop: DESIGN.spacing.xl * 3,
   },
   closeButton: {
     alignSelf: 'flex-end',
-    marginBottom: 20,
+    marginBottom: DESIGN.spacing.xl,
   },
   modalTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 32,
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.xl * 2,
   },
   languageCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 12,
+    backgroundColor: DESIGN.colors.surface,
+    padding: DESIGN.spacing.lg,
+    borderRadius: DESIGN.radius.lg,
+    marginBottom: DESIGN.spacing.md,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   languageCardActive: {
-    borderColor: '#8B5CF6',
+    borderColor: DESIGN.colors.primary,
     backgroundColor: '#F3E8FF',
   },
   languageFlag: {
     fontSize: 32,
-    marginRight: 16,
+    marginRight: DESIGN.spacing.lg,
   },
   languageName: {
     flex: 1,
-    fontSize: 18,
-    color: '#374151',
+    fontSize: DESIGN.typography.subtitle,
+    color: DESIGN.colors.text.secondary,
     fontWeight: '600',
   },
   languageNameActive: {
-    color: '#8B5CF6',
+    color: DESIGN.colors.primary,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: DESIGN.spacing.xl * 2.5,
   },
   emoji: {
     fontSize: 60,
-    marginBottom: 16,
+    marginBottom: DESIGN.spacing.lg,
   },
   title: {
-    fontSize: 28,
+    fontSize: DESIGN.typography.title,
     fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 8,
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6E6E73',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.secondary,
     textAlign: 'center',
   },
   sectionTitle: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 20,
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.xl,
   },
   roleCard: {
-    padding: 24,
-    borderRadius: 24,
-    marginBottom: 16,
+    padding: DESIGN.spacing.xl,
+    borderRadius: DESIGN.radius.xl,
+    marginBottom: DESIGN.spacing.lg,
     alignItems: 'center',
   },
   roleEmoji: {
     fontSize: 40,
-    marginBottom: 8,
+    marginBottom: DESIGN.spacing.sm,
   },
   roleTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1C1C1E',
-    marginBottom: 4,
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.xs,
   },
   roleDesc: {
-    fontSize: 14,
-    color: '#6E6E73',
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.text.secondary,
     textAlign: 'center',
   },
   back: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: DESIGN.spacing.xl,
   },
   backText: {
-    fontSize: 16,
-    color: '#8B5CF6',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.primary,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: DESIGN.spacing.sm,
   },
   inputContainer: {
-    marginBottom: 24,
+    marginBottom: DESIGN.spacing.xl,
   },
   label: {
-    fontSize: 14,
-    color: '#6E6E73',
-    marginBottom: 8,
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.text.secondary,
+    marginBottom: DESIGN.spacing.sm,
   },
   phoneInput: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.lg,
+    paddingHorizontal: DESIGN.spacing.lg,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
   prefix: {
-    fontSize: 18,
-    color: '#1C1C1E',
-    marginRight: 8,
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.primary,
+    marginRight: DESIGN.spacing.sm,
     fontWeight: '600',
   },
   input: {
     flex: 1,
-    fontSize: 18,
-    color: '#1C1C1E',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.primary,
+    paddingVertical: DESIGN.spacing.lg,
+    paddingHorizontal: DESIGN.spacing.sm,
   },
   button: {
-    backgroundColor: '#8B5CF6',
-    borderRadius: 16,
-    padding: 18,
+    backgroundColor: DESIGN.colors.primary,
+    borderRadius: DESIGN.radius.lg,
+    paddingVertical: DESIGN.spacing.lg + 2,
     alignItems: 'center',
     opacity: 0.5,
   },
@@ -472,33 +525,34 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   buttonText: {
-    color: 'white',
-    fontSize: 18,
+    color: DESIGN.colors.surface,
+    fontSize: DESIGN.typography.subtitle,
     fontWeight: 'bold',
   },
   otpContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 32,
-    gap: 12,
+    gap: DESIGN.spacing.md,
+    marginBottom: DESIGN.spacing.xl * 2,
   },
   otpInput: {
     flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.lg,
+    paddingVertical: DESIGN.spacing.xl,
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
-    color: '#1C1C1E',
+    color: DESIGN.colors.text.primary,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
   resendButton: {
     alignItems: 'center',
-    marginTop: 16,
+    marginTop: DESIGN.spacing.lg,
   },
   resendText: {
-    color: '#8B5CF6',
-    fontSize: 16,
+    color: DESIGN.colors.primary,
+    fontSize: DESIGN.typography.body,
     fontWeight: '600',
   },
 });

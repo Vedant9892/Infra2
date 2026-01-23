@@ -10,15 +10,15 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  StyleSheet,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet } from 'react-native';
 import { API_BASE_URL } from '../../constants/api';
 import { supabase } from '../../constants/supabase';
-
+import { DESIGN } from '../../constants/designSystem';
 
 export default function SetupProfile() {
   const router = useRouter();
@@ -69,90 +69,85 @@ export default function SetupProfile() {
     return true;
   };
 
- const handleSaveProfile = async () => {
-  if (!validateForm()) return;
-  if (!userId) {
-    Alert.alert('Error', 'User ID not found');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    console.log('📤 Uploading image to Supabase...');
-    
-    // Generate unique filename
-    const fileExt = profileImage!.split('.').pop() || 'jpg';
-    const fileName = `${userId}-${Date.now()}.${fileExt}`;
-    const filePath = `profiles/${fileName}`;
-
-    // For React Native, we need to use FormData or ArrayBuffer
-    // Convert base64 to ArrayBuffer
-    const base64Data = profileImageBase64!.split(',')[1]; // Remove data:image/jpeg;base64,
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-
-    // Upload to Supabase
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('profile-photos')
-      .upload(filePath, byteArray, {
-        contentType: 'image/jpeg',
-        upsert: true,
-      });
-
-    if (uploadError) {
-      console.error('❌ Upload error:', uploadError);
-      Alert.alert('Error', `Failed to upload image: ${uploadError.message}`);
+  const handleSaveProfile = async () => {
+    if (!validateForm()) return;
+    if (!userId) {
+      Alert.alert('Error', 'User ID not found');
       return;
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('profile-photos')
-      .getPublicUrl(filePath);
+    setLoading(true);
+    try {
+      console.log('📤 Uploading image to Supabase...');
+      
+      const fileExt = profileImage!.split('.').pop() || 'jpg';
+      const fileName = `${userId}-${Date.now()}.${fileExt}`;
+      const filePath = `profiles/${fileName}`;
 
-    console.log('✅ Image uploaded:', publicUrl);
+      const base64Data = profileImageBase64!.split(',')[1];
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
 
-    // Save to MongoDB
-    const payload = {
-      userId,
-      name: name.trim(),
-      profilePhoto: publicUrl,
-    };
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, byteArray, {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
 
-    console.log('📤 Saving profile to backend...');
-    
-    const apiResponse = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+      if (uploadError) {
+        console.error('❌ Upload error:', uploadError);
+        Alert.alert('Error', `Failed to upload image: ${uploadError.message}`);
+        return;
+      }
 
-    const data = await apiResponse.json();
+      const { data: { publicUrl } } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
 
-    if (apiResponse.ok && data.success) {
-      console.log('✓ Profile saved successfully');
-      Alert.alert('Success', 'Profile setup completed!', [
-        {
-          text: 'OK',
-          onPress: () => router.replace('/(tabs)/home'),
+      console.log('✅ Image uploaded:', publicUrl);
+
+      const payload = {
+        userId,
+        name: name.trim(),
+        profilePhoto: publicUrl,
+      };
+
+      console.log('📤 Saving profile to backend...');
+      
+      const apiResponse = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      ]);
-    } else {
-      Alert.alert('Error', data.message || 'Failed to save profile');
+        body: JSON.stringify(payload),
+      });
+
+      const data = await apiResponse.json();
+
+      if (apiResponse.ok && data.success) {
+        console.log('✓ Profile saved successfully');
+        Alert.alert('Success', 'Profile setup completed!', [
+          {
+            text: 'OK',
+            onPress: () => router.replace('/(tabs)/home'),
+          },
+        ]);
+      } else {
+        Alert.alert('Error', data.message || 'Failed to save profile');
+      }
+    } catch (error: any) {
+      console.error('✗ Error saving profile:', error);
+      Alert.alert('Error', error.message || 'Failed to save profile');
+    } finally {
+      setLoading(false);
     }
-  } catch (error: any) {
-    console.error('✗ Error saving profile:', error);
-    Alert.alert('Error', error.message || 'Failed to save profile');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
+
   return (
     <KeyboardAvoidingView 
       style={styles.container}
@@ -166,8 +161,12 @@ export default function SetupProfile() {
       >
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={styles.title}>Complete Your Profile</Text>
-          <Text style={styles.subtitle}>Add your details to get started</Text>
+          <Text style={styles.title} allowFontScaling={false}>
+            Complete Your Profile
+          </Text>
+          <Text style={styles.subtitle} allowFontScaling={false}>
+            Add your details to get started
+          </Text>
         </View>
 
         {/* Profile Image Section */}
@@ -184,9 +183,13 @@ export default function SetupProfile() {
             />
           ) : (
             <View style={styles.imagePlaceholder}>
-              <Ionicons name="camera" size={48} color="#9CA3AF" />
-              <Text style={styles.imagePlaceholderText}>Tap to add photo</Text>
-              <Text style={styles.imagePlaceholderSubtext}>JPG, PNG up to 5MB</Text>
+              <Ionicons name="camera" size={48} color={DESIGN.colors.text.tertiary} />
+              <Text style={styles.imagePlaceholderText} allowFontScaling={false}>
+                Tap to add photo
+              </Text>
+              <Text style={styles.imagePlaceholderSubtext} allowFontScaling={false}>
+                JPG, PNG up to 5MB
+              </Text>
             </View>
           )}
         </TouchableOpacity>
@@ -196,31 +199,36 @@ export default function SetupProfile() {
             style={styles.changePhotoButton}
             onPress={pickImage}
           >
-            <Ionicons name="refresh" size={16} color="#8B5CF6" />
-            <Text style={styles.changePhotoText}>Change Photo</Text>
+            <Ionicons name="refresh" size={16} color={DESIGN.colors.primary} />
+            <Text style={styles.changePhotoText} allowFontScaling={false}>
+              Change Photo
+            </Text>
           </TouchableOpacity>
         )}
 
         {/* Name Input */}
         <View style={styles.inputWrapper}>
-          <Text style={styles.label}>Full Name</Text>
+          <Text style={styles.label} allowFontScaling={false}>
+            Full Name
+          </Text>
           <View style={styles.inputContainer}>
-            <Ionicons name="person" size={20} color="#8B5CF6" />
+            <Ionicons name="person" size={20} color={DESIGN.colors.primary} />
             <TextInput
               style={styles.input}
               placeholder="Enter your full name"
               value={name}
               onChangeText={setName}
               editable={!loading}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={DESIGN.colors.text.tertiary}
+              allowFontScaling={false}
             />
           </View>
         </View>
 
         {/* Info Box */}
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color="#3B82F6" />
-          <Text style={styles.infoBoxText}>
+          <Ionicons name="information-circle" size={20} color={DESIGN.colors.info} />
+          <Text style={styles.infoBoxText} allowFontScaling={false}>
             Your profile will be visible to site managers and supervisors. Make sure the photo is clear and recent.
           </Text>
         </View>
@@ -233,11 +241,13 @@ export default function SetupProfile() {
           activeOpacity={0.8}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={DESIGN.colors.surface} size="small" />
           ) : (
             <>
-              <Ionicons name="checkmark-done" size={20} color="#fff" />
-              <Text style={styles.saveButtonText}>Save Profile</Text>
+              <Ionicons name="checkmark-done" size={20} color={DESIGN.colors.surface} />
+              <Text style={styles.saveButtonText} allowFontScaling={false}>
+                Save Profile
+              </Text>
             </>
           )}
         </TouchableOpacity>
@@ -251,124 +261,121 @@ export default function SetupProfile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DESIGN.colors.background,
   },
   contentWrapper: {
-    paddingBottom: 40,
+    paddingBottom: DESIGN.spacing.xl * 2,
   },
   headerSection: {
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 24,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingTop: DESIGN.spacing.xl * 3,
+    paddingBottom: DESIGN.spacing.xl,
     alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#111',
-    marginBottom: 8,
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.sm,
     letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.secondary,
     textAlign: 'center',
   },
   imageContainer: {
     alignItems: 'center',
-    marginHorizontal: 20,
-    marginBottom: 16,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginBottom: DESIGN.spacing.lg,
   },
   profileImage: {
     width: 140,
     height: 140,
     borderRadius: 70,
     borderWidth: 3,
-    borderColor: '#8B5CF6',
+    borderColor: DESIGN.colors.primary,
     backgroundColor: '#F3E8FF',
   },
   imagePlaceholder: {
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DESIGN.colors.background,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderColor: DESIGN.colors.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   imagePlaceholderText: {
-    fontSize: 14,
+    fontSize: DESIGN.typography.body,
     fontWeight: '600',
-    color: '#374151',
-    marginTop: 8,
+    color: DESIGN.colors.text.secondary,
+    marginTop: DESIGN.spacing.sm,
   },
   imagePlaceholderSubtext: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginTop: 4,
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.text.tertiary,
+    marginTop: DESIGN.spacing.xs,
   },
   changePhotoButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 20,
-    marginBottom: 24,
-    paddingVertical: 10,
-    gap: 6,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginBottom: DESIGN.spacing.xl,
+    paddingVertical: DESIGN.spacing.md,
+    gap: DESIGN.spacing.sm,
   },
   changePhotoText: {
-    fontSize: 14,
+    fontSize: DESIGN.typography.body,
     fontWeight: '600',
-    color: '#8B5CF6',
+    color: DESIGN.colors.primary,
   },
   inputWrapper: {
-    marginHorizontal: 20,
-    marginBottom: 24,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginBottom: DESIGN.spacing.xl,
   },
   label: {
-    fontSize: 14,
+    fontSize: DESIGN.typography.caption,
     fontWeight: '700',
-    color: '#374151',
-    marginBottom: 10,
+    color: DESIGN.colors.text.secondary,
+    marginBottom: DESIGN.spacing.md,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: DESIGN.colors.surface,
     borderWidth: 2,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    height: 52,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
+    borderColor: DESIGN.colors.border,
+    borderRadius: DESIGN.radius.md,
+    paddingHorizontal: DESIGN.spacing.lg,
+    height: DESIGN.button.min,
+    ...DESIGN.shadow.sm,
     elevation: 1,
   },
   input: {
     flex: 1,
-    marginLeft: 12,
-    fontSize: 16,
-    color: '#111',
+    marginLeft: DESIGN.spacing.md,
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.primary,
   },
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#EFF6FF',
-    marginHorizontal: 20,
-    marginBottom: 32,
-    padding: 16,
-    borderRadius: 12,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginBottom: DESIGN.spacing.xl * 2,
+    padding: DESIGN.spacing.lg,
+    borderRadius: DESIGN.radius.md,
     borderLeftWidth: 4,
-    borderLeftColor: '#3B82F6',
-    gap: 12,
+    borderLeftColor: DESIGN.colors.info,
+    gap: DESIGN.spacing.md,
   },
   infoBoxText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: DESIGN.typography.caption,
     color: '#1E40AF',
     lineHeight: 18,
   },
@@ -376,28 +383,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#8B5CF6',
-    marginHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    backgroundColor: DESIGN.colors.primary,
+    marginHorizontal: DESIGN.spacing.lg,
+    paddingVertical: DESIGN.spacing.lg,
+    borderRadius: DESIGN.radius.md,
+    ...DESIGN.shadow.md,
     elevation: 5,
-    gap: 8,
+    gap: DESIGN.spacing.sm,
   },
   saveButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-    shadowOpacity: 0,
+    backgroundColor: DESIGN.colors.text.tertiary,
+    ...DESIGN.shadow.sm,
     elevation: 0,
   },
   saveButtonText: {
-    fontSize: 16,
+    fontSize: DESIGN.typography.body,
     fontWeight: '700',
-    color: '#fff',
+    color: DESIGN.colors.surface,
   },
   bottomSpacer: {
-    height: 20,
+    height: DESIGN.spacing.xl,
   },
 });

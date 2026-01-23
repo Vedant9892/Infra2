@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../contexts/UserContext';
 import { useLanguage } from '../../contexts/LanguageContext';
 import type { Language } from '../../contexts/LanguageContext';
+import { DESIGN } from '../../constants/designSystem';
 
 export default function Profile() {
   const router = useRouter();
@@ -25,7 +26,7 @@ export default function Profile() {
       en: 'English',
       hi: 'हिंदी',
       mr: 'मराठी',
-      ta: 'தமிழ்', // handle Tamil since Language includes 'ta'
+      ta: 'தமிழ்',
     };
     return langs[language] ?? 'English';
   };
@@ -34,54 +35,70 @@ export default function Profile() {
     <ScrollView style={styles.container}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <Ionicons name="notifications-outline" size={24} color="#000" />
+        <Text style={styles.headerTitle} allowFontScaling={false}>
+          Profile
+        </Text>
+        <Ionicons name="notifications-outline" size={24} color={DESIGN.colors.text.primary} />
       </View>
 
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle" size={80} color="#8B5CF6" />
+          <Ionicons name="person-circle" size={80} color={DESIGN.colors.primary} />
         </View>
-        <Text style={styles.name}>{user?.name || 'User'}</Text>
-        <Text style={styles.role}>{user ? getRoleDisplay(user.role) : 'Guest'}</Text>
+        <Text style={styles.name} allowFontScaling={false}>
+          {user?.name || 'User'}
+        </Text>
+        <Text style={styles.role} allowFontScaling={false}>
+          {user ? getRoleDisplay(user.role) : 'Guest'}
+        </Text>
         <View style={styles.statusBadge}>
           <View style={styles.statusDot} />
-          <Text style={styles.status}>Active</Text>
+          <Text style={styles.status} allowFontScaling={false}>
+            Active
+          </Text>
         </View>
       </View>
 
       <View style={styles.infoSection}>
         <View style={styles.infoCard}>
           <View style={styles.iconCircle}>
-            <Ionicons name="call" size={20} color="#8B5CF6" />
+            <Ionicons name="call" size={20} color={DESIGN.colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Phone Number</Text>
-            <Text style={styles.infoText}>{user?.phoneNumber || 'N/A'}</Text>
+            <Text style={styles.infoLabel} allowFontScaling={false}>
+              Phone Number
+            </Text>
+            <Text style={styles.infoText} allowFontScaling={false}>
+              {user?.phoneNumber || 'N/A'}
+            </Text>
           </View>
         </View>
 
         <View style={styles.infoCard}>
           <View style={styles.iconCircle}>
-            <Ionicons name="location" size={20} color="#8B5CF6" />
+            <Ionicons name="location" size={20} color={DESIGN.colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Location</Text>
-            <Text style={styles.infoText}>{user?.location || 'N/A'}</Text>
+            <Text style={styles.infoLabel} allowFontScaling={false}>
+              Location
+            </Text>
+            <Text style={styles.infoText} allowFontScaling={false}>
+              {user?.location || 'N/A'}
+            </Text>
           </View>
         </View>
 
         <View style={styles.infoCard}>
           <View style={styles.iconCircle}>
-            <Ionicons name="language" size={20} color="#8B5CF6" />
+            <Ionicons name="language" size={20} color={DESIGN.colors.primary} />
           </View>
           <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Language</Text>
-            <Text style={styles.infoText}>{getLanguageDisplay()}</Text>
-          </View>
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Language</Text>
-            <Text style={styles.infoText}>English</Text>
+            <Text style={styles.infoLabel} allowFontScaling={false}>
+              Language
+            </Text>
+            <Text style={styles.infoText} allowFontScaling={false}>
+              {getLanguageDisplay()}
+            </Text>
           </View>
         </View>
       </View>
@@ -89,32 +106,40 @@ export default function Profile() {
       <View style={styles.menuSection}>
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="settings-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuText}>Settings</Text>
+            <Ionicons name="settings-outline" size={24} color={DESIGN.colors.text.secondary} />
+            <Text style={styles.menuText} allowFontScaling={false}>
+              Settings
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="help-circle-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuText}>Help & Support</Text>
+            <Ionicons name="help-circle-outline" size={24} color={DESIGN.colors.text.secondary} />
+            <Text style={styles.menuText} allowFontScaling={false}>
+              Help & Support
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuItem}>
           <View style={styles.menuLeft}>
-            <Ionicons name="information-circle-outline" size={24} color="#6B7280" />
-            <Text style={styles.menuText}>About</Text>
+            <Ionicons name="information-circle-outline" size={24} color={DESIGN.colors.text.secondary} />
+            <Text style={styles.menuText} allowFontScaling={false}>
+              About
+            </Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Ionicons name="log-out-outline" size={20} color="#fff" />
-        <Text style={styles.logoutText}>Logout</Text>
+        <Ionicons name="log-out-outline" size={20} color={DESIGN.colors.surface} />
+        <Text style={styles.logoutText} allowFontScaling={false}>
+          Logout
+        </Text>
       </TouchableOpacity>
 
       <View style={styles.bottomSpacer} />
@@ -125,81 +150,79 @@ export default function Profile() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DESIGN.colors.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingTop: DESIGN.spacing.xl * 3,
+    paddingBottom: DESIGN.spacing.lg,
+    backgroundColor: DESIGN.colors.surface,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: 'bold',
+    color: DESIGN.colors.text.primary,
   },
   profileCard: {
-    backgroundColor: '#fff',
-    margin: 20,
-    marginBottom: 16,
-    padding: 24,
-    borderRadius: 16,
+    backgroundColor: DESIGN.colors.surface,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginBottom: DESIGN.spacing.lg,
+    marginTop: DESIGN.spacing.lg,
+    paddingVertical: DESIGN.spacing.xl,
+    borderRadius: DESIGN.radius.lg,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    ...DESIGN.shadow.sm,
     elevation: 3,
   },
   avatarContainer: {
-    marginBottom: 16,
+    marginBottom: DESIGN.spacing.lg,
   },
   name: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 4,
-    color: '#111',
+    marginBottom: DESIGN.spacing.xs,
+    color: DESIGN.colors.text.primary,
   },
   role: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 8,
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.secondary,
+    marginBottom: DESIGN.spacing.md,
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#D1FAE5',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: DESIGN.spacing.md,
+    paddingVertical: DESIGN.spacing.xs,
+    borderRadius: DESIGN.radius.md,
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 6,
+    backgroundColor: DESIGN.colors.success,
+    marginRight: DESIGN.spacing.sm,
   },
   status: {
-    fontSize: 12,
-    color: '#10B981',
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.success,
     fontWeight: '600',
   },
   infoSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: DESIGN.spacing.lg,
   },
   infoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    backgroundColor: DESIGN.colors.surface,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingVertical: DESIGN.spacing.lg,
+    borderRadius: DESIGN.radius.md,
+    marginBottom: DESIGN.spacing.lg,
+    ...DESIGN.shadow.sm,
     elevation: 2,
   },
   iconCircle: {
@@ -209,37 +232,35 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3E8FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: DESIGN.spacing.lg,
   },
   infoContent: {
     flex: 1,
   },
   infoLabel: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    marginBottom: 2,
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.text.tertiary,
+    marginBottom: DESIGN.spacing.xs,
   },
   infoText: {
-    fontSize: 16,
-    color: '#111',
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.primary,
     fontWeight: '500',
   },
   menuSection: {
-    marginHorizontal: 20,
-    marginTop: 8,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginTop: DESIGN.spacing.md,
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.md,
+    ...DESIGN.shadow.sm,
     elevation: 2,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingHorizontal: DESIGN.spacing.lg,
+    paddingVertical: DESIGN.spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
@@ -248,33 +269,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuText: {
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 12,
+    fontSize: DESIGN.typography.body,
+    color: DESIGN.colors.text.secondary,
+    marginLeft: DESIGN.spacing.lg,
     fontWeight: '500',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    margin: 20,
-    marginTop: 24,
-    backgroundColor: '#EF4444',
-    paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: '#EF4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    marginHorizontal: DESIGN.spacing.lg,
+    marginTop: DESIGN.spacing.xl,
+    backgroundColor: DESIGN.colors.danger,
+    paddingVertical: DESIGN.spacing.lg,
+    borderRadius: DESIGN.radius.md,
+    ...DESIGN.shadow.md,
     elevation: 4,
   },
   logoutText: {
-    color: '#fff',
-    fontSize: 16,
+    color: DESIGN.colors.surface,
+    fontSize: DESIGN.typography.body,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: DESIGN.spacing.sm,
   },
   bottomSpacer: {
-    height: 100,
+    height: DESIGN.spacing.xl * 4,
   },
 });
