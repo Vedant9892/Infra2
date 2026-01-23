@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { API_BASE_URL } from '../constants/api';
 
 type Role = 'labour' | 'supervisor' | 'engineer' | 'owner';
 
@@ -7,6 +8,22 @@ interface UserData {
   name: string;
   phoneNumber: string;
   location: string;
+  currentSiteId?: string;
+  currentSiteName?: string;
+  enrollmentStatus?: 'active' | 'inactive' | 'pending';
+  profileCompleted?: boolean;
+  ownerDetails?: {
+    companyName: string;
+    ownerName: string;
+    email: string;
+    gstNumber: string;
+    panNumber: string;
+    address: string;
+    city: string;
+    state: string;
+    pincode: string;
+  };
+  isRegistered?: boolean;
 }
 
 interface UserContextType {

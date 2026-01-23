@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useUser } from '../../contexts/UserContext';
+import { API_BASE_URL } from '../../constants/api';
 
 type Role = 'labour' | 'supervisor' | 'engineer' | 'owner';
 
@@ -25,6 +26,7 @@ export default function LoginScreen() {
   const [showOtpScreen, setShowOtpScreen] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [generatedOtp, setGeneratedOtp] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSendOtp = () => {
     if (selectedRole && phoneNumber && phoneNumber.length === 10) {
@@ -38,16 +40,55 @@ export default function LoginScreen() {
     }
   };
 
-  const handleVerifyOtp = () => {
+  const handleVerifyOtp = async () => {
     const enteredOtp = otp.join('');
     if (enteredOtp === generatedOtp) {
-      setUser({
-        role: selectedRole!,
-        name: 'Rohit Deshmukh',
-        phoneNumber,
-        location: 'Mumbai, Maharashtra',
-      });
-      router.replace('/(tabs)/home');
+      // After successful OTP verification
+      try {
+        setShowOtpScreen(false);
+        setLoading(true);
+
+        // Call login API
+          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phoneNumber: phoneNumber,
+            role: selectedRole,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          const userId = data.userId;
+          console.log('✓ Login successful, userId:', userId);
+          
+          // Update user context
+          setUser({
+            role: selectedRole!,
+            phoneNumber,
+            name: '',
+            location: 'Mumbai, Maharashtra',
+          });
+
+          // Navigate to profile setup
+          console.log('→ Navigating to SetupProfile');
+          router.replace({
+            pathname: '/(auth)/setup-profile',
+            params: { userId },
+          });
+        } else {
+          alert('Login failed. Please try again.');
+          setShowOtpScreen(true);
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        alert('Error during login. Please try again.');
+        setShowOtpScreen(true);
+      } finally {
+        setLoading(false);
+      }
     } else {
       alert('Invalid OTP. Please try again.');
       setOtp(['', '', '', '', '', '']);

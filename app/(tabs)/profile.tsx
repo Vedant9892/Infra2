@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../contexts/UserContext';
 import { useLanguage } from '../../contexts/LanguageContext';
+import type { Language } from '../../contexts/LanguageContext';
 
 export default function Profile() {
   const router = useRouter();
@@ -19,9 +20,14 @@ export default function Profile() {
     return role.charAt(0).toUpperCase() + role.slice(1);
   };
 
-  const getLanguageDisplay = () => {
-    const langs = { en: 'English', hi: 'हिंदी', mr: 'मराठी' };
-    return langs[language] || 'English';
+  const getLanguageDisplay = (): string => {
+    const langs: Partial<Record<Language, string>> = {
+      en: 'English',
+      hi: 'हिंदी',
+      mr: 'मराठी',
+      ta: 'தமிழ்', // handle Tamil since Language includes 'ta'
+    };
+    return langs[language] ?? 'English';
   };
 
   return (

@@ -45,8 +45,8 @@ export async function registerRoutes(
     } catch (err) {
       if (err instanceof z.ZodError) {
         return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
+          message: err.issues[0].message,
+          field: err.issues[0].path.join('.'),
         });
       }
       throw err;
@@ -57,6 +57,50 @@ export async function registerRoutes(
     const history = await storage.getAttendanceHistory(DEMO_USER_ID);
     res.json(history);
   });
+
+  // ============= ADD THIS NEW ROUTE =============
+  app.post('/api/users/complete-profile', async (req, res) => {
+    try {
+      const { userId, name, profilePhoto } = req.body;
+
+      console.log('📥 Complete profile request:', { 
+        userId, 
+        name, 
+        hasPhoto: !!profilePhoto 
+      });
+
+      if (!userId || !name || !profilePhoto) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Missing required fields: userId, name, or profilePhoto' 
+        });
+      }
+
+      // For now, just return success
+      // You'll need to implement actual storage later
+      const user = {
+        id: userId,
+        name,
+        profilePhoto,
+        isProfileComplete: true,
+      };
+
+      console.log('✅ Profile completed successfully');
+
+      res.json({
+        success: true,
+        message: 'Profile completed successfully',
+        user,
+      });
+    } catch (error) {
+      console.error('❌ Complete profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update profile',
+      });
+    }
+  });
+  // ============= END NEW ROUTE =============
 
   return httpServer;
 }

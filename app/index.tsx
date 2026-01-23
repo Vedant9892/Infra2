@@ -1,3 +1,4 @@
+
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions, ImageBackground } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef } from 'react';

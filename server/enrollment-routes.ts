@@ -42,7 +42,7 @@ const RevokeEnrollmentSchema = z.object({
 /**
  * Generate a secure 6-digit enrollment code
  */
-function generateEnrollmentCode(): string {
+function createEnrollmentCode(): string {
   // Generate cryptographically secure random 6-digit number
   const code = crypto.randomInt(100000, 999999).toString();
   return code;
@@ -126,7 +126,7 @@ export async function generateEnrollmentCode(req: Request, res: Response) {
     }
 
     // Generate new code
-    const newCode = generateEnrollmentCode();
+    const newCode = createEnrollmentCode();
     const now = new Date();
     const expiresAt = expiresInDays ? new Date(now.getTime() + expiresInDays * 24 * 60 * 60 * 1000) : null;
 
@@ -166,7 +166,7 @@ export async function generateEnrollmentCode(req: Request, res: Response) {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation error', details: error.errors });
+      return res.status(400).json({ error: 'Validation error', details: error.issues });
     }
     console.error('Generate code error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -206,7 +206,7 @@ export async function validateEnrollmentCode(req: Request, res: Response) {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation error', details: error.errors });
+      return res.status(400).json({ error: 'Validation error', details: error.issues });
     }
     console.error('Validate code error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -334,7 +334,7 @@ export async function enrollWorker(req: Request, res: Response) {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation error', details: error.errors });
+      return res.status(400).json({ error: 'Validation error', details: error.issues });
     }
     console.error('Enroll worker error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -500,7 +500,7 @@ export async function revokeEnrollment(req: Request, res: Response) {
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Validation error', details: error.errors });
+      return res.status(400).json({ error: 'Validation error', details: error.issues });
     }
     console.error('Revoke enrollment error:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -41,7 +41,7 @@ export default function WorkerEnrollment() {
   // Worker details
   const [workerName, setWorkerName] = useState(user?.name || '');
   const [workerPhone, setWorkerPhone] = useState('');
-  const [workerRole, setWorkerRole] = useState<'labour' | 'engineer' | 'supervisor' | 'manager'>('labour');
+  const [workerRole, setWorkerRole] = useState<'labour' | 'engineer' | 'supervisor'>('labour');
 
   const handleCodeChange = (text: string) => {
     // Only allow digits, max 6 characters
@@ -125,12 +125,12 @@ export default function WorkerEnrollment() {
           needsVerification: data.enrollment.needsVerification,
         }));
 
-        // Update user context
+        // Update user context (ensure required fields are present)
         setUser({
-          ...user,
+          role: workerRole, // 'labour' | 'engineer' | 'supervisor'
           name: workerName,
           phoneNumber: workerPhone,
-          role: workerRole,
+          location: user?.location ?? 'Mumbai, Maharashtra',
           currentSiteId: data.enrollment.siteId,
           currentSiteName: data.enrollment.siteName,
           enrollmentStatus: 'active',
@@ -265,14 +265,14 @@ export default function WorkerEnrollment() {
         <View style={styles.inputGroup}>
           <Text style={styles.inputLabel}>Your Role *</Text>
           <View style={styles.roleButtons}>
-            {['labour', 'engineer', 'supervisor', 'manager'].map((role) => (
+            {['labour', 'engineer', 'supervisor'].map((role) => (
               <TouchableOpacity
                 key={role}
                 style={[
                   styles.roleButton,
                   workerRole === role && styles.roleButtonActive,
                 ]}
-                onPress={() => setWorkerRole(role as any)}
+                onPress={() => setWorkerRole(role as 'labour' | 'engineer' | 'supervisor')}
               >
                 <Text
                   style={[

@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -199,7 +200,11 @@ export default function SiteDetail() {
         <View key={worker.id} style={styles.workerCard}>
           <View style={styles.workerAvatar}>
             {worker.photoUri ? (
-              <Image source={{ uri: worker.photoUri }} style={styles.avatarImage} />
+              <Image 
+                source={{ uri: worker.photoUri }} 
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
             ) : (
               <Ionicons name="person" size={32} color="#8B5CF6" />
             )}

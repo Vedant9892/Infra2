@@ -20,7 +20,7 @@ export async function setupVite(server: Server, app: Express) {
     configFile: false,
     customLogger: {
       ...viteLogger,
-      error: (msg, options) => {
+      error: (msg: string, options?: { timestamp?: boolean; error?: Error }) => {
         viteLogger.error(msg, options);
         process.exit(1);
       },

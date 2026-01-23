@@ -22,6 +22,7 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
+import { API_BASE_URL } from '../../constants/api';
 
 type Task = {
   id: string;
@@ -131,7 +132,7 @@ export default function HomeScreen() {
   const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
-  const [gpsCheckInterval, setGpsCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const [gpsCheckInterval, setGpsCheckInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const cameraRef = useRef<any>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
@@ -177,9 +178,11 @@ export default function HomeScreen() {
       startGPSTracking();
     }
     return () => {
-      if (gpsCheckInterval) clearInterval(gpsCheckInterval);
+      if (gpsCheckInterval) {
+        clearInterval(gpsCheckInterval);
+      }
     };
-  }, [attendanceRecords]);
+  }, [attendanceRecords, user?.role]);
 
   const startGPSTracking = async () => {
     // Check GPS every 2 hours (7200000 ms)
@@ -191,7 +194,6 @@ export default function HomeScreen() {
         longitude: location.coords.longitude,
       };
       console.log('GPS Check:', record);
-      // In production, send to database
       Alert.alert('GPS Check', 'Location verified for attendance tracking');
     }, 7200000); // 2 hours
 
