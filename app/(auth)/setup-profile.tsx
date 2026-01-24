@@ -22,9 +22,10 @@ import { DESIGN } from '../../constants/designSystem';
 
 export default function SetupProfile() {
   const router = useRouter();
-  const { userId } = useLocalSearchParams<{ userId: string }>();
-  
+  const { userId, phoneNumber } = useLocalSearchParams<{ userId: string; phoneNumber?: string }>();
+
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileImageBase64, setProfileImageBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,16 @@ export default function SetupProfile() {
       Alert.alert('Validation Error', 'Please enter your full name.');
       return false;
     }
+    if (!email.trim()) {
+      Alert.alert('Validation Error', 'Please enter your email address.');
+      return false;
+    }
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Validation Error', 'Please enter a valid email address.');
+      return false;
+    }
     if (!profileImageBase64) {
       Alert.alert('Validation Error', 'Please select a profile image.');
       return false;
@@ -79,7 +90,7 @@ export default function SetupProfile() {
     setLoading(true);
     try {
       console.log('📤 Uploading image to Supabase...');
-      
+
       const fileExt = profileImage!.split('.').pop() || 'jpg';
       const fileName = `${userId}-${Date.now()}.${fileExt}`;
       const filePath = `profiles/${fileName}`;
@@ -114,11 +125,12 @@ export default function SetupProfile() {
       const payload = {
         userId,
         name: name.trim(),
+        email: email.trim().toLowerCase(),
         profilePhoto: publicUrl,
       };
 
       console.log('📤 Saving profile to backend...');
-      
+
       const apiResponse = await fetch(`${API_BASE_URL}/api/users/complete-profile`, {
         method: 'POST',
         headers: {
@@ -134,7 +146,7 @@ export default function SetupProfile() {
         Alert.alert('Success', 'Profile setup completed!', [
           {
             text: 'OK',
-            onPress: () => router.replace('/(tabs)/home'),
+            onPress: () => router.replace('/(owner)/sites'),
           },
         ]);
       } else {
@@ -149,13 +161,13 @@ export default function SetupProfile() {
   };
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <StatusBar style="dark" />
-      
-      <ScrollView 
+
+      <ScrollView
         contentContainerStyle={styles.contentWrapper}
         showsVerticalScrollIndicator={false}
       >
@@ -165,19 +177,19 @@ export default function SetupProfile() {
             Complete Your Profile
           </Text>
           <Text style={styles.subtitle} allowFontScaling={false}>
-            Add your details to get started
+            Add your details to complete setup
           </Text>
         </View>
 
         {/* Profile Image Section */}
-        <TouchableOpacity 
-          style={styles.imageContainer} 
+        <TouchableOpacity
+          style={styles.imageContainer}
           onPress={pickImage}
           activeOpacity={0.8}
         >
           {profileImage ? (
-            <Image 
-              source={{ uri: profileImage }} 
+            <Image
+              source={{ uri: profileImage }}
               style={styles.profileImage}
               resizeMode="cover"
             />
@@ -195,7 +207,7 @@ export default function SetupProfile() {
         </TouchableOpacity>
 
         {profileImage && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.changePhotoButton}
             onPress={pickImage}
           >
@@ -209,7 +221,7 @@ export default function SetupProfile() {
         {/* Name Input */}
         <View style={styles.inputWrapper}>
           <Text style={styles.label} allowFontScaling={false}>
-            Full Name
+            Full Name *
           </Text>
           <View style={styles.inputContainer}>
             <Ionicons name="person" size={20} color={DESIGN.colors.primary} />
@@ -225,13 +237,52 @@ export default function SetupProfile() {
           </View>
         </View>
 
-        {/* Info Box */}
-        <View style={styles.infoBox}>
-          <Ionicons name="information-circle" size={20} color={DESIGN.colors.info} />
-          <Text style={styles.infoBoxText} allowFontScaling={false}>
-            Your profile will be visible to site managers and supervisors. Make sure the photo is clear and recent.
+        {/* Email Input */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label} allowFontScaling={false}>
+            Email Address *
+          </Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail" size={20} color={DESIGN.colors.primary} />
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              value={email}
+              onChangeText={setEmail}
+              editable={!loading}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholderTextColor={DESIGN.colors.text.tertiary}
+              allowFontScaling={false}
+            />
+          </View>
+          <Text style={styles.disclaimerText} allowFontScaling={false}>
+            ⓘ This email will be used for login and cannot be changed later.
           </Text>
         </View>
+
+        {/* Mobile Number (Read-only) */}
+        <View style={styles.inputWrapper}>
+          <Text style={styles.label} allowFontScaling={false}>
+            Mobile Number
+          </Text>
+          <View style={[styles.inputContainer, styles.inputContainerDisabled]}>
+            <Ionicons name="call" size={20} color={DESIGN.colors.text.tertiary} />
+            <TextInput
+              style={[styles.input, styles.inputDisabled]}
+              value={phoneNumber || 'Not provided'}
+              editable={false}
+              placeholderTextColor={DESIGN.colors.text.tertiary}
+              allowFontScaling={false}
+            />
+            <Ionicons name="checkmark-circle" size={20} color={DESIGN.colors.success} />
+          </View>
+          <Text style={styles.verifiedText} allowFontScaling={false}>
+            ✓ Mobile number verified
+          </Text>
+        </View>
+
+
 
         {/* Save Button */}
         <TouchableOpacity
@@ -246,7 +297,7 @@ export default function SetupProfile() {
             <>
               <Ionicons name="checkmark-done" size={20} color={DESIGN.colors.surface} />
               <Text style={styles.saveButtonText} allowFontScaling={false}>
-                Save Profile
+                Complete Profile Setup
               </Text>
             </>
           )}
@@ -360,6 +411,26 @@ const styles = StyleSheet.create({
     marginLeft: DESIGN.spacing.md,
     fontSize: DESIGN.typography.body,
     color: DESIGN.colors.text.primary,
+  },
+  inputContainerDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: DESIGN.colors.border,
+  },
+  inputDisabled: {
+    color: DESIGN.colors.text.secondary,
+  },
+  disclaimerText: {
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.warning,
+    marginTop: DESIGN.spacing.sm,
+    marginLeft: DESIGN.spacing.xs,
+  },
+  verifiedText: {
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.success,
+    marginTop: DESIGN.spacing.sm,
+    marginLeft: DESIGN.spacing.xs,
+    fontWeight: '600',
   },
   infoBox: {
     flexDirection: 'row',

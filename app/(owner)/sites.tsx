@@ -30,7 +30,7 @@ type Site = {
 
 export default function Sites() {
   const router = useRouter();
-  
+
   // Sample sites data - in production, fetch from backend
   const [sites, setSites] = useState<Site[]>([
     {
@@ -119,7 +119,7 @@ export default function Sites() {
   };
 
   const handleAddSite = () => {
-    router.push('/(owner)/add-site');
+    router.push('/(owner)/create-site');
   };
 
   return (
@@ -133,12 +133,20 @@ export default function Sites() {
       >
         <View style={styles.headerContent}>
           <View>
-            <Text style={styles.headerSubtitle}>Construction Sites</Text>
-            <Text style={styles.headerTitle}>My Sites</Text>
+            <Text style={styles.headerSubtitle} allowFontScaling={false}>Construction Sites</Text>
+            <Text style={styles.headerTitle} allowFontScaling={false}>My Sites</Text>
           </View>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddSite}>
-            <Ionicons name="add" size={24} color="#8B5CF6" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.profileButton}
+              onPress={() => router.push('/(owner)/profile')}
+            >
+              <Ionicons name="person-circle-outline" size={28} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addButton} onPress={handleAddSite}>
+              <Ionicons name="add" size={24} color="#8B5CF6" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats Cards */}
@@ -338,6 +346,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 5,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   statsRow: {
     flexDirection: 'row',

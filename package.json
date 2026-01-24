@@ -4,6 +4,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "dev": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
@@ -29,7 +30,7 @@
     "expo-router": "~6.0.22",
     "expo-status-bar": "~3.0.9",
     "express": "^4.22.1",
-    "mongodb": "4.1",
+    "mongodb": "^4.17.2",
     "pg": "^8.17.2",
     "react": "19.1.0",
     "react-dom": "19.1.0",

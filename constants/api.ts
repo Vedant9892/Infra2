@@ -2,7 +2,7 @@
 import { Platform } from 'react-native';
 
 // Replace this with YOUR computer's IP address
-const DEV_IP = '192.168.0.100'; // ← Change this to your IP from ipconfig
+const DEV_IP = '172.20.10.8'; // ← Change this to your IP from ipconfig
 
 export const API_BASE_URL = Platform.select({
   // For iOS simulator, localhost works

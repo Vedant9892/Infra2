@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import MapView, { Marker, Circle } from 'react-native-maps';
+import SiteMap from '../../components/SiteMap';
 
 type Site = {
   id: string;
@@ -41,7 +41,7 @@ export default function SiteRegistration() {
     projectType: 'residential',
     budget: '',
   });
-  
+
   const [selectedLocation, setSelectedLocation] = useState({
     latitude: 19.0760, // Mumbai default
     longitude: 72.8777,
@@ -121,7 +121,7 @@ export default function SiteRegistration() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -250,7 +250,7 @@ export default function SiteRegistration() {
             </Text>
           </View>
 
-          <MapView
+          <SiteMap
             style={styles.map}
             initialRegion={{
               latitude: selectedLocation.latitude,
@@ -259,25 +259,10 @@ export default function SiteRegistration() {
               longitudeDelta: 0.01,
             }}
             onPress={handleMapPress}
-          >
-            <Marker
-              coordinate={selectedLocation}
-              title={siteData.name}
-              description="Site Center"
-            >
-              <View style={styles.markerContainer}>
-                <Ionicons name="business" size={32} color="#8B5CF6" />
-              </View>
-            </Marker>
-            
-            <Circle
-              center={selectedLocation}
-              radius={radius}
-              fillColor="rgba(139, 92, 246, 0.2)"
-              strokeColor="rgba(139, 92, 246, 0.8)"
-              strokeWidth={2}
-            />
-          </MapView>
+            selectedLocation={selectedLocation}
+            siteName={siteData.name}
+            radius={radius}
+          />
 
           <View style={styles.mapControls}>
             <View style={styles.coordsDisplay}>
