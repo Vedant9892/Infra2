@@ -9,6 +9,7 @@ export interface SiteFormData {
     address: string;
     latitude: number;
     longitude: number;
+    radius?: number; // Attendance radius in meters (50-500)
     boundary: BoundaryPoint[];
     overlayImage?: string; // base64 or uri
     overlaySettings?: {
@@ -20,3 +21,6 @@ export interface SiteFormData {
 }
 
 export type CreateSiteStep = 'details' | 'boundary';
+
+// Default export to prevent Expo Router from treating this as a route
+export default null;

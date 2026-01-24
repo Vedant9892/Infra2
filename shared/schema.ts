@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,7 +8,7 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   username: text("username").notNull().unique(), // Phone number for Indian context
   name: text("name").notNull(),
-  role: text("role").notNull(), // 'Labour', 'Supervisor', 'Engineer', 'Owner'
+  role: text("role").notNull(), // 'labour' | 'site_supervisor' | 'junior_engineer' | 'senior_engineer' | 'site_manager' | 'site_owner'
   avatar: text("avatar"),
   location: text("location"),
   preferredLanguage: text("preferred_language").default("English"),
@@ -24,6 +24,11 @@ export const tasks = pgTable("tasks", {
   supervisor: text("supervisor"), 
   supervisorAvatar: text("supervisor_avatar"),
   date: timestamp("date").defaultNow(),
+  // New fields for Engineer → Supervisor → Labour flow
+  siteId: integer("site_id"),
+  assignedToSupervisorId: integer("assigned_to_supervisor_id"),
+  assignedToLabourId: integer("assigned_to_labour_id"),
+  createdByEngineerId: integer("created_by_engineer_id"),
 });
 
 export const attendance = pgTable("attendance", {
@@ -34,6 +39,15 @@ export const attendance = pgTable("attendance", {
   location: text("location"),
   photoUrl: text("photo_url"),
   isSynced: boolean("is_synced").default(true),
+  // New fields for GPS attendance with supervisor approval
+  shiftSlot: text("shift_slot"), // 'morning' | 'afternoon' | 'evening'
+  approvalStatus: text("approval_status").default("pending"), // 'pending' | 'approved' | 'rejected'
+  approvedBy: integer("approved_by"), // supervisor user_id
+  approvedAt: timestamp("approved_at"),
+  photoUri: text("photo_uri"), // Alternative photo field
+  gpsLat: decimal("gps_lat", { precision: 10, scale: 8 }),
+  gpsLon: decimal("gps_lon", { precision: 11, scale: 8 }),
+  siteId: integer("site_id"), // Which site this attendance is for
 });
 
 export const stats = pgTable("stats", {
@@ -42,6 +56,24 @@ export const stats = pgTable("stats", {
   attendanceRate: integer("attendance_rate").notNull(),
   hoursWorked: integer("hours_worked").notNull(),
   tasksCompleted: integer("tasks_completed").notNull(),
+});
+
+// Sites table for owner site management
+export const sites = pgTable("sites", {
+  id: serial("id").primaryKey(),
+  ownerId: integer("owner_id").notNull(),
+  name: text("name").notNull(),
+  location: text("location").notNull(),
+  address: text("address"),
+  pincode: text("pincode"),
+  projectType: text("project_type"), // 'residential' | 'commercial' | 'industrial' | 'infrastructure'
+  budget: text("budget"),
+  latitude: decimal("latitude", { precision: 10, scale: 8 }),
+  longitude: decimal("longitude", { precision: 11, scale: 8 }),
+  radius: integer("radius"), // in meters (50-500)
+  status: text("status").default("active"), // 'active' | 'completed' | 'on-hold'
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // === BASE SCHEMAS ===

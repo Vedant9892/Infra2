@@ -153,3 +153,6 @@ export const styles = StyleSheet.create({
     height: 20,
   },
 });
+
+// Default export to prevent Expo Router from treating this as a route
+export default null;

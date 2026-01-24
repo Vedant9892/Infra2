@@ -15,7 +15,7 @@ import { useUser } from '../../contexts/UserContext';
 import { API_BASE_URL } from '../../constants/api';
 import { DESIGN } from '../../constants/designSystem';
 
-type Role = 'labour' | 'supervisor' | 'engineer' | 'owner';
+type Role = 'labour' | 'site_supervisor' | 'junior_engineer' | 'senior_engineer' | 'site_manager' | 'site_owner';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -52,6 +52,9 @@ export default function LoginScreen() {
 
         // Different API calls based on auth mode
         const endpoint = authMode === 'signup' ? '/api/auth/register' : '/api/auth/signin';
+        console.log('📡 Calling API:', `${API_BASE_URL}${endpoint}`);
+        console.log('📦 Payload:', { phoneNumber, role: selectedRole });
+
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -61,10 +64,17 @@ export default function LoginScreen() {
           }),
         });
 
+        console.log('📡 Response status:', response.status);
         const data = await response.json();
+        console.log('📦 Response data:', data);
 
         if (data.success) {
           console.log(`✓ ${authMode === 'signup' ? 'Sign up' : 'Sign in'} successful`);
+
+          // Set token if provided (for labour API authentication)
+          if (data.token) {
+            setToken(data.token);
+          }
 
           // Update user context
           setUser({
@@ -75,6 +85,8 @@ export default function LoginScreen() {
             id: data.userId || data.user?._id,
             location: data.user?.location || 'Mumbai, Maharashtra',
             profilePhoto: data.user?.profilePhoto || null,
+            currentSiteId: data.user?.currentSiteId || data.user?.enrolledSiteId || null,
+            enrolledSiteId: data.user?.enrolledSiteId || data.user?.currentSiteId || null,
           });
 
           if (authMode === 'signup') {
@@ -82,16 +94,26 @@ export default function LoginScreen() {
             console.log('→ Navigating to SetupProfile');
             router.replace({
               pathname: '/(auth)/setup-profile',
-              params: { userId: data.userId, phoneNumber },
+              params: { userId: data.userId, phoneNumber, role: selectedRole },
             });
           } else {
             // Existing user - go to dashboard
             console.log('→ Navigating to Dashboard');
-            const dashboardPath = selectedRole === 'owner' ? '/(owner)/sites' : '/(tabs)/home';
+            let dashboardPath = '/(tabs)/home';
+            if (selectedRole === 'site_owner' || selectedRole === 'site_manager') {
+              dashboardPath = '/(owner)/sites';
+            } else if (selectedRole === 'labour') {
+              // Labour goes to labour-specific dashboard
+              dashboardPath = '/(labour)/(tabs)/home';
+            } else if (selectedRole === 'site_supervisor') {
+              // Supervisor goes to supervisor-specific dashboard
+              dashboardPath = '/(supervisor)/(tabs)/home';
+            }
             router.replace(dashboardPath);
           }
         } else {
           // Handle specific error cases
+          console.error('❌ API returned error:', data.message);
           if (authMode === 'signup' && data.message?.includes('already exists')) {
             alert('Account already exists. Please sign in instead.');
           } else if (authMode === 'signin' && data.message?.includes('not found')) {
@@ -102,7 +124,8 @@ export default function LoginScreen() {
           setShowOtpScreen(true);
         }
       } catch (error) {
-        console.error('Auth error:', error);
+        console.error('❌ Auth error:', error);
+        console.error('Error details:', error.message);
         alert('Error during authentication. Please try again.');
         setShowOtpScreen(true);
       } finally {
@@ -342,37 +365,63 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.roleCard, { backgroundColor: '#FFD166' }]}
-            onPress={() => setSelectedRole('supervisor')}
+            onPress={() => setSelectedRole('site_supervisor')}
           >
             <Text style={styles.roleEmoji}>👨‍💼</Text>
             <Text style={styles.roleTitle} allowFontScaling={false}>
-              {t('login.supervisor')}
+              {t('login.site_supervisor')}
             </Text>
             <Text style={styles.roleDesc} allowFontScaling={false}>
-              Manage teams & approve tasks
+              Verify attendance & assign tasks
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.roleCard, { backgroundColor: '#F6C1CC' }]}
-            onPress={() => setSelectedRole('engineer')}
+            onPress={() => setSelectedRole('junior_engineer')}
           >
             <Text style={styles.roleEmoji}>👨‍🔧</Text>
             <Text style={styles.roleTitle} allowFontScaling={false}>
-              {t('login.engineer')}
+              {t('login.junior_engineer')}
             </Text>
             <Text style={styles.roleDesc} allowFontScaling={false}>
-              Technical oversight & planning
+              Assign tasks to supervisors
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.roleCard, { backgroundColor: '#C1E7E3' }]}
+            onPress={() => setSelectedRole('senior_engineer')}
+          >
+            <Text style={styles.roleEmoji}>👨‍🏭</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.senior_engineer')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Technical oversight & approvals
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.roleCard, { backgroundColor: '#FFE5B4' }]}
+            onPress={() => setSelectedRole('site_manager')}
+          >
+            <Text style={styles.roleEmoji}>👔</Text>
+            <Text style={styles.roleTitle} allowFontScaling={false}>
+              {t('login.site_manager')}
+            </Text>
+            <Text style={styles.roleDesc} allowFontScaling={false}>
+              Manage sites, workers & enrollments
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.roleCard, { backgroundColor: '#D4A5FF' }]}
-            onPress={() => setSelectedRole('owner')}
+            onPress={() => setSelectedRole('site_owner')}
           >
-            <Text style={styles.roleEmoji}>👔</Text>
+            <Text style={styles.roleEmoji}>🏢</Text>
             <Text style={styles.roleTitle} allowFontScaling={false}>
-              {t('login.owner')}
+              {t('login.site_owner')}
             </Text>
             <Text style={styles.roleDesc} allowFontScaling={false}>
               Full site analytics & control

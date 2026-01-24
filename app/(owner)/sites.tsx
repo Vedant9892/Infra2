@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,12 +6,14 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUser } from '../../contexts/UserContext';
+import { API_BASE_URL } from '../../constants/api';
 
 type Site = {
   id: string;
@@ -31,7 +33,47 @@ type Site = {
 
 export default function Sites() {
   const router = useRouter();
-  const { logout } = useUser();
+  const { user, logout } = useUser();
+  const [sites, setSites] = useState<Site[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch sites from database
+  const fetchSites = async () => {
+    try {
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/sites/owner/${user.id}`);
+      const data = await response.json();
+
+      console.log('📡 Sites API Response:', JSON.stringify(data, null, 2));
+
+      if (data.success && data.sites) {
+        console.log(`✅ Loaded ${data.sites.length} sites`);
+        setSites(data.sites);
+      } else {
+        console.error('❌ Failed to load sites:', data.message || 'Unknown error');
+        Alert.alert('Error', data.message || 'Failed to load sites');
+      }
+    } catch (error) {
+      console.error('Error fetching sites:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSites();
+  }, [user?.id]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchSites();
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -51,54 +93,6 @@ export default function Sites() {
     );
   };
 
-  // Sample sites data - in production, fetch from backend
-  const [sites, setSites] = useState<Site[]>([
-    {
-      id: '1',
-      name: 'Mumbai Residential Complex',
-      location: 'Andheri West, Mumbai',
-      latitude: 19.1136,
-      longitude: 72.8697,
-      radius: 100,
-      address: 'Plot No. 45, Andheri West, Mumbai - 400058',
-      projectType: 'residential',
-      status: 'active',
-      workersCount: 45,
-      progress: 67,
-      budget: '₹2.5 Cr',
-      startDate: new Date('2024-01-15'),
-    },
-    {
-      id: '2',
-      name: 'Tech Park Construction',
-      location: 'Bandra Kurla Complex',
-      latitude: 19.0596,
-      longitude: 72.8656,
-      radius: 150,
-      address: 'BKC, Mumbai - 400051',
-      projectType: 'commercial',
-      status: 'active',
-      workersCount: 78,
-      progress: 45,
-      budget: '₹8.5 Cr',
-      startDate: new Date('2024-03-01'),
-    },
-    {
-      id: '3',
-      name: 'Highway Bridge Project',
-      location: 'Thane-Nashik Highway',
-      latitude: 19.2183,
-      longitude: 72.9781,
-      radius: 200,
-      address: 'NH-3, Thane District',
-      projectType: 'infrastructure',
-      status: 'on-hold',
-      workersCount: 0,
-      progress: 23,
-      budget: '₹15 Cr',
-      startDate: new Date('2023-11-10'),
-    },
-  ]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -133,9 +127,8 @@ export default function Sites() {
   };
 
   const handleSitePress = (site: Site) => {
-    // Navigate to site details page
-    Alert.alert('Site Details', `Opening dashboard for ${site.name}`);
-    // TODO: router.push(`/(owner)/site/${site.id}`);
+    // Navigate to site dashboard
+    router.push(`/(owner)/site/${site.id}`);
   };
 
   const handleAddSite = () => {

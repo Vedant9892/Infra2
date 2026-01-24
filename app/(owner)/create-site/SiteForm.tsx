@@ -55,30 +55,6 @@ export default function SiteForm({ data, onChange, onNext }: Props) {
                 />
             </View>
 
-            <View style={styles.inputGroup}>
-                <Text style={styles.label}>Location Coordinates</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.label, { fontSize: 12 }]}>Latitude</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={data.latitude.toString()}
-                            onChangeText={(text) => updateField('latitude', parseFloat(text) || data.latitude)}
-                            keyboardType="numeric"
-                        />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={[styles.label, { fontSize: 12 }]}>Longitude</Text>
-                        <TextInput
-                            style={styles.input}
-                            value={data.longitude.toString()}
-                            onChangeText={(text) => updateField('longitude', parseFloat(text) || data.longitude)}
-                            keyboardType="numeric"
-                        />
-                    </View>
-                </View>
-            </View>
-
             <TouchableOpacity style={styles.btnPrimary} onPress={onNext}>
                 <Text style={styles.btnPrimaryText}>Continue to Boundary Setup</Text>
                 <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, ScrollView, Alert } from 'react-native';
 import MapView, { Marker, Polygon, Overlay, MapPressEvent } from 'react-native-maps';
 import * as ImagePicker from 'expo-image-picker';
+import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { SiteFormData } from './_types';
 import { styles } from './_styles';
@@ -14,6 +15,11 @@ interface Props {
 
 export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
     const [mode, setMode] = useState<'draw' | 'upload'>('draw');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searching, setSearching] = useState(false);
+    const [mapLoaded, setMapLoaded] = useState(false);
+    const [showFallback, setShowFallback] = useState(false);
+    const mapRef = useRef<MapView>(null);
 
     const [region, setRegion] = useState({
         latitude: data.latitude,
@@ -21,6 +27,28 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
     });
+
+    // Fallback timer if map doesn't load
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (!mapLoaded) {
+                setShowFallback(true);
+            }
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, [mapLoaded]);
+
+    const addQuickBoundary = () => {
+        const size = 0.002;
+        const newBoundary = [
+            { latitude: data.latitude + size, longitude: data.longitude - size },
+            { latitude: data.latitude + size, longitude: data.longitude + size },
+            { latitude: data.latitude - size, longitude: data.longitude + size },
+            { latitude: data.latitude - size, longitude: data.longitude - size },
+        ];
+        onChange({ ...data, boundary: newBoundary });
+        Alert.alert('Success', 'Default boundary added! You can now create the site.');
+    };
 
     const handleMapPress = (e: MapPressEvent) => {
         if (mode === 'draw') {
@@ -35,11 +63,29 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
             const newBoundary = [...data.boundary];
             newBoundary.pop();
             onChange({ ...data, boundary: newBoundary });
+            // Provide feedback
+            Alert.alert('Point Removed', `Removed last point. ${newBoundary.length} points remaining.`);
         }
     };
 
     const handleClear = () => {
-        onChange({ ...data, boundary: [] });
+        if (data.boundary.length > 0) {
+            Alert.alert(
+                'Clear All Points',
+                'Are you sure you want to remove all boundary points?',
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Clear All',
+                        style: 'destructive',
+                        onPress: () => {
+                            onChange({ ...data, boundary: [] });
+                            Alert.alert('Cleared', 'All boundary points have been removed.');
+                        }
+                    }
+                ]
+            );
+        }
     };
 
     const pickImage = async () => {
@@ -53,64 +99,129 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
             allowsEditing: true,
-            quality: 0.8,
+            quality: 1,
             base64: true,
         });
 
-        if (!result.canceled && result.assets && result.assets.length > 0) {
-            const asset = result.assets[0];
-            const imageBase64 = `data:${asset.type || 'image/jpeg'};base64,${asset.base64}`;
-
+        if (!result.canceled && result.assets[0].base64) {
             onChange({
                 ...data,
-                overlayImage: imageBase64,
-                overlaySettings: {
-                    ...data.overlaySettings!,
-                    scale: 0.002,
-                    opacity: 0.7
-                }
+                overlayImage: `data:image/jpeg;base64,${result.assets[0].base64}`
             });
-            setMode('upload');
         }
     };
 
     const getOverlayBounds = () => {
-        if (!data.overlaySettings) return undefined;
-        const { scale } = data.overlaySettings;
-        const halfScale = scale / 2;
+        const scale = data.overlaySettings?.scale || 0.004;
         return [
-            [data.latitude - halfScale, data.longitude - halfScale],
-            [data.latitude + halfScale, data.longitude + halfScale]
+            [data.latitude - scale, data.longitude - scale],
+            [data.latitude + scale, data.longitude + scale],
         ];
     };
 
-    const updateOverlaySetting = (setting: 'opacity' | 'scale', change: number) => {
-        const current = data.overlaySettings?.[setting] || 0;
-        let newValue = current + change;
-
-        if (setting === 'opacity') newValue = Math.max(0.1, Math.min(1, newValue));
-        if (setting === 'scale') newValue = Math.max(0.0005, Math.min(0.02, newValue));
-
+    const handleOverlaySetting = (setting: 'opacity' | 'scale' | 'rotation', value: number) => {
         onChange({
             ...data,
             overlaySettings: {
                 ...data.overlaySettings!,
-                [setting]: newValue
+                [setting]: value
             }
         });
     };
 
+    const searchLocation = async () => {
+        if (!searchQuery.trim()) return;
+
+        setSearching(true);
+        try {
+            // Request permission first
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== 'granted') {
+                alert('Location permission needed for search. You can still draw the boundary manually.');
+                setSearching(false);
+                return;
+            }
+
+            // Use geocoding to find location
+            const results = await Location.geocodeAsync(searchQuery);
+
+            if (results && results.length > 0) {
+                const location = results[0];
+                const newRegion = {
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                };
+
+                // Animate map to searched location
+                mapRef.current?.animateToRegion(newRegion, 1000);
+                setRegion(newRegion);
+
+                // Update form data with new coordinates
+                onChange({
+                    ...data,
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                });
+            } else {
+                alert('Location not found. Please try a different search term.');
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            alert('Search failed. You can still draw the boundary manually.');
+        } finally {
+            setSearching(false);
+        }
+    };
+
     return (
         <View style={styles.mapContainer}>
+            {/* Search Bar */}
+            <View style={localStyles.searchContainer}>
+                <View style={localStyles.searchBar}>
+                    <Ionicons name="search" size={20} color="#6B7280" style={localStyles.searchIcon} />
+                    <TextInput
+                        style={localStyles.searchInput}
+                        placeholder="Search for a location..."
+                        placeholderTextColor="#9CA3AF"
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        onSubmitEditing={searchLocation}
+                        returnKeyType="search"
+                    />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity onPress={() => setSearchQuery('')} style={localStyles.clearButton}>
+                            <Ionicons name="close-circle" size={20} color="#9CA3AF" />
+                        </TouchableOpacity>
+                    )}
+                </View>
+                {searchQuery.length > 0 && (
+                    <TouchableOpacity
+                        style={localStyles.searchButton}
+                        onPress={searchLocation}
+                        disabled={searching}
+                    >
+                        <Text style={localStyles.searchButtonText}>
+                            {searching ? 'Searching...' : 'Search'}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+            </View>
+
             <MapView
+                ref={mapRef}
                 style={StyleSheet.absoluteFill}
-                region={region}
+                initialRegion={region}
                 onRegionChangeComplete={setRegion}
                 onPress={handleMapPress}
-                mapType="satellite"
+                onMapReady={() => setMapLoaded(true)}
+                mapType="standard"
+                showsUserLocation={false}
+                showsMyLocationButton={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
             >
-                <Marker coordinate={{ latitude: data.latitude, longitude: data.longitude }} pinColor="indigo" />
-
                 {data.boundary.length > 0 && (
                     <Polygon
                         coordinates={data.boundary}
@@ -120,9 +231,18 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
                     />
                 )}
 
+                {mode === 'draw' && data.boundary.map((point, index) => (
+                    <Marker 
+                        key={index} 
+                        coordinate={point} 
+                        pinColor="violet"
+                        title={`Point ${index + 1}`}
+                    />
+                ))}
+
                 {mode === 'draw' && data.boundary.length > 0 && (
                     <Marker coordinate={data.boundary[data.boundary.length - 1]} pinColor="violet">
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#8B5CF6' }} />
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#8B5CF6', borderWidth: 2, borderColor: '#fff' }} />
                     </Marker>
                 )}
 
@@ -134,6 +254,20 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
                     />
                 )}
             </MapView>
+
+            {/* Fallback Button if Map Doesn't Load */}
+            {showFallback && data.boundary.length === 0 && (
+                <View style={localStyles.fallbackContainer}>
+                    <Text style={localStyles.fallbackText}>Map taking too long?</Text>
+                    <TouchableOpacity
+                        style={localStyles.fallbackButton}
+                        onPress={addQuickBoundary}
+                    >
+                        <Text style={localStyles.fallbackButtonText}>⚡ Use Default Boundary</Text>
+                    </TouchableOpacity>
+                    <Text style={localStyles.fallbackHint}>Creates boundary at {data.address}</Text>
+                </View>
+            )}
 
             <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
                 <View style={styles.controlPanel}>
@@ -154,65 +288,97 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
                     </View>
 
                     {mode === 'draw' ? (
-                        <View>
-                            <Text style={styles.sliderLabelRow}>
-                                Points: {data.boundary.length} (Min 3)
-                                {data.boundary.length >= 3 && <Text style={{ color: '#10B981' }}> ✅ Valid</Text>}
-                            </Text>
-                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                                <TouchableOpacity style={[styles.sliderBtn, { flex: 1, backgroundColor: '#FEF2F2' }]} onPress={handleUndo}>
-                                    <Text style={[styles.sliderBtnText, { color: '#EF4444', fontSize: 14 }]}>Undo Last</Text>
+                        <>
+                            <View style={localStyles.pointsCounter}>
+                                <View style={localStyles.pointsBadge}>
+                                    <Ionicons name="location" size={18} color="#8B5CF6" />
+                                    <Text style={localStyles.pointsText}>
+                                        {data.boundary.length} Point{data.boundary.length !== 1 ? 's' : ''}
+                                    </Text>
+                                </View>
+                                <Text style={localStyles.pointsHint}>
+                                    {data.boundary.length < 3 ? `Need ${3 - data.boundary.length} more` : '✓ Ready to create'}
+                                </Text>
+                            </View>
+
+                            {/* Action Buttons */}
+                            <View style={localStyles.actionButtonsContainer}>
+                                <TouchableOpacity
+                                    style={[
+                                        localStyles.actionButton,
+                                        localStyles.undoButton,
+                                        data.boundary.length === 0 && localStyles.buttonDisabled
+                                    ]}
+                                    onPress={handleUndo}
+                                    disabled={data.boundary.length === 0}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={localStyles.buttonContent}>
+                                        <Ionicons 
+                                            name="arrow-undo" 
+                                            size={22} 
+                                            color={data.boundary.length === 0 ? "#9CA3AF" : "#8B5CF6"} 
+                                        />
+                                        <Text style={[
+                                            localStyles.actionButtonText,
+                                            data.boundary.length === 0 && { color: "#9CA3AF" }
+                                        ]}>
+                                            Undo Last
+                                        </Text>
+                                    </View>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.sliderBtn, { flex: 1, backgroundColor: '#F3F4F6' }]} onPress={handleClear}>
-                                    <Text style={[styles.sliderBtnText, { color: '#6B7280', fontSize: 14 }]}>Clear All</Text>
+
+                                <TouchableOpacity
+                                    style={[
+                                        localStyles.actionButton,
+                                        localStyles.clearButton,
+                                        data.boundary.length === 0 && localStyles.buttonDisabled
+                                    ]}
+                                    onPress={handleClear}
+                                    disabled={data.boundary.length === 0}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={localStyles.buttonContent}>
+                                        <Ionicons 
+                                            name="trash" 
+                                            size={22} 
+                                            color={data.boundary.length === 0 ? "#9CA3AF" : "#EF4444"} 
+                                        />
+                                        <Text style={[
+                                            localStyles.actionButtonText,
+                                            localStyles.clearButtonText,
+                                            data.boundary.length === 0 && { color: "#9CA3AF" }
+                                        ]}>
+                                            Clear All
+                                        </Text>
+                                    </View>
                                 </TouchableOpacity>
                             </View>
-                            <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 8, textAlign: 'center' }}>
-                                Tap on map to add boundary points
+
+                            <Text style={styles.helpText}>
+                                {data.boundary.length === 0 
+                                    ? "📍 Tap on the map to add boundary points" 
+                                    : `📍 Tap map to add • Use Undo to remove last point`
+                                }
                             </Text>
-                        </View>
+                        </>
                     ) : (
-                        <View style={styles.overlayControls}>
-                            {data.overlayImage ? (
+                        <>
+                            {!data.overlayImage ? (
+                                <TouchableOpacity style={styles.btnPrimary} onPress={pickImage}>
+                                    <Text style={styles.btnPrimaryText}>Upload Site Plan Image</Text>
+                                </TouchableOpacity>
+                            ) : (
                                 <>
-                                    <View style={styles.sliderRow}>
-                                        <View style={styles.sliderLabelRow}>
-                                            <Text style={styles.sliderLabel}>Opacity</Text>
-                                            <Text style={styles.sliderValue}>{Math.round((data.overlaySettings?.opacity || 0) * 100)}%</Text>
-                                        </View>
-                                        <View style={styles.sliderButtons}>
-                                            <TouchableOpacity style={styles.sliderBtn} onPress={() => updateOverlaySetting('opacity', -0.1)}><Text style={styles.sliderBtnText}>-</Text></TouchableOpacity>
-                                            <View style={{ flex: 1 }} />
-                                            <TouchableOpacity style={styles.sliderBtn} onPress={() => updateOverlaySetting('opacity', 0.1)}><Text style={styles.sliderBtnText}>+</Text></TouchableOpacity>
-                                        </View>
-                                    </View>
-
-                                    <View style={styles.sliderRow}>
-                                        <View style={styles.sliderLabelRow}>
-                                            <Text style={styles.sliderLabel}>Size / Scale</Text>
-                                            <Text style={styles.sliderValue}>{(data.overlaySettings?.scale || 0).toFixed(4)}</Text>
-                                        </View>
-                                        <View style={styles.sliderButtons}>
-                                            <TouchableOpacity style={styles.sliderBtn} onPress={() => updateOverlaySetting('scale', -0.0001)}><Text style={styles.sliderBtnText}>-</Text></TouchableOpacity>
-                                            <View style={{ flex: 1 }} />
-                                            <TouchableOpacity style={styles.sliderBtn} onPress={() => updateOverlaySetting('scale', 0.0001)}><Text style={styles.sliderBtnText}>+</Text></TouchableOpacity>
-                                        </View>
-                                    </View>
-
-                                    <TouchableOpacity
-                                        style={[styles.uploadButton, { padding: 10, marginTop: 8 }]}
-                                        onPress={() => onChange({ ...data, overlayImage: undefined })}
-                                    >
-                                        <Text style={[styles.uploadText, { color: '#EF4444', marginTop: 0 }]}>Remove Overlay</Text>
+                                    <Text style={styles.instructionText}>Adjust Overlay:</Text>
+                                    <Text style={styles.helpText}>Opacity: {(data.overlaySettings?.opacity || 0.7) * 100}%</Text>
+                                    <Text style={styles.helpText}>Scale: {data.overlaySettings?.scale || 0.004}</Text>
+                                    <TouchableOpacity style={styles.btnSecondary} onPress={() => onChange({ ...data, overlayImage: undefined })}>
+                                        <Text style={styles.btnSecondaryText}>Remove Overlay</Text>
                                     </TouchableOpacity>
                                 </>
-                            ) : (
-                                <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                                    <Ionicons name="image-outline" size={32} color="#9CA3AF" />
-                                    <Text style={styles.uploadText}>Select Layout Image</Text>
-                                </TouchableOpacity>
                             )}
-                        </View>
+                        </>
                     )}
 
                     <TouchableOpacity
@@ -232,3 +398,164 @@ export default function SiteBoundary({ data, onChange, onSubmit }: Props) {
         </View>
     );
 }
+
+const localStyles = StyleSheet.create({
+    searchContainer: {
+        position: 'absolute',
+        top: 20,
+        left: 16,
+        right: 16,
+        zIndex: 10,
+        flexDirection: 'row',
+        gap: 8,
+    },
+    searchBar: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    searchIcon: {
+        marginRight: 12,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: 15,
+        color: '#111827',
+        padding: 0,
+    },
+    clearButton: {
+        padding: 4,
+    },
+    searchButton: {
+        backgroundColor: '#8B5CF6',
+        borderRadius: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    searchButtonText: {
+        color: '#FFFFFF',
+        fontSize: 15,
+        fontWeight: '600',
+    },
+    fallbackContainer: {
+        position: 'absolute',
+        top: '40%',
+        left: 32,
+        right: 32,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    fallbackText: {
+        fontSize: 16,
+        color: '#374151',
+        marginBottom: 16,
+        textAlign: 'center',
+    },
+    fallbackButton: {
+        backgroundColor: '#8B5CF6',
+        paddingHorizontal: 24,
+        paddingVertical: 14,
+        borderRadius: 12,
+        marginBottom: 12,
+    },
+    fallbackButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    fallbackHint: {
+        fontSize: 13,
+        color: '#6B7280',
+        textAlign: 'center',
+    },
+    pointsCounter: {
+        marginBottom: 16,
+        padding: 12,
+        backgroundColor: '#F3E8FF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#E9D5FF',
+    },
+    pointsBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 6,
+    },
+    pointsText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#8B5CF6',
+        marginLeft: 8,
+    },
+    pointsHint: {
+        fontSize: 13,
+        color: '#6B7280',
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+    actionButtonsContainer: {
+        flexDirection: 'row',
+        gap: 12,
+        marginBottom: 12,
+    },
+    actionButton: {
+        flex: 1,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        borderWidth: 2,
+        backgroundColor: '#FFFFFF',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    undoButton: {
+        borderColor: '#8B5CF6',
+    },
+    clearButton: {
+        borderColor: '#EF4444',
+    },
+    buttonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    actionButtonText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#8B5CF6',
+    },
+    clearButtonText: {
+        color: '#EF4444',
+    },
+    buttonDisabled: {
+        opacity: 0.4,
+        backgroundColor: '#F3F4F6',
+    },
+});

@@ -22,7 +22,7 @@ import { DESIGN } from '../../constants/designSystem';
 
 export default function SetupProfile() {
   const router = useRouter();
-  const { userId, phoneNumber } = useLocalSearchParams<{ userId: string; phoneNumber?: string }>();
+  const { userId, phoneNumber, role } = useLocalSearchParams<{ userId: string; phoneNumber?: string; role?: string }>();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -145,11 +145,18 @@ export default function SetupProfile() {
         if (data.success) {
           console.log('Profile completed successfully');
 
-          // Role-based navigation
-          let dashboardPath = '/(tabs)/home'; // Default for labour, supervisor, engineer
+          // Get role from params, API response, or use default
+          const userRole = role || data.user?.role || 'engineer';
 
-          if (user?.role === 'owner') {
+          // Role-based navigation
+          let dashboardPath = '/(tabs)/home'; // Default for engineer
+
+          if (userRole === 'site_owner' || userRole === 'site_manager') {
             dashboardPath = '/(owner)/sites';
+          } else if (userRole === 'labour') {
+            dashboardPath = '/(labour)/(tabs)/home';
+          } else if (userRole === 'site_supervisor') {
+            dashboardPath = '/(supervisor)/(tabs)/home';
           }
 
           Alert.alert(

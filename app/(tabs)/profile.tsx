@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,7 +43,15 @@ export default function Profile() {
 
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle" size={80} color={DESIGN.colors.primary} />
+          {user?.profilePhoto ? (
+            <Image
+              source={{ uri: user.profilePhoto }}
+              style={styles.profilePhoto}
+              resizeMode="cover"
+            />
+          ) : (
+            <Ionicons name="person-circle" size={80} color={DESIGN.colors.primary} />
+          )}
         </View>
         <Text style={styles.name} allowFontScaling={false}>
           {user?.name || 'User'}
@@ -179,6 +187,13 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginBottom: DESIGN.spacing.lg,
+  },
+  profilePhoto: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 2,
+    borderColor: DESIGN.colors.primary,
   },
   name: {
     fontSize: 24,

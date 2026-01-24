@@ -3,6 +3,9 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { registerAttendanceRoutes } from "./attendance-routes";
+import { registerTaskRoutes } from "./task-routes";
+import { registerSitesRoutes } from "./sites-routes";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -101,6 +104,15 @@ export async function registerRoutes(
     }
   });
   // ============= END NEW ROUTE =============
+
+  // Register attendance routes (supervisor approval, GPS attendance)
+  registerAttendanceRoutes(app);
+
+  // Register task routes (Engineer → Supervisor → Labour)
+  registerTaskRoutes(app);
+
+  // Register sites routes (Owner site management)
+  registerSitesRoutes(app);
 
   return httpServer;
 }

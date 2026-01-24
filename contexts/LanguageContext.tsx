@@ -27,6 +27,11 @@ const translations = {
     'login.supervisor': 'Supervisor',
     'login.engineer': 'Engineer',
     'login.owner': 'Owner',
+    'login.site_supervisor': 'Site Supervisor',
+    'login.junior_engineer': 'Junior Site Engineer',
+    'login.senior_engineer': 'Senior Site Engineer',
+    'login.site_manager': 'Site Manager',
+    'login.site_owner': 'Site Owner',
     'login.selectLanguage': 'Select Language',
     
     // Home
@@ -207,6 +212,11 @@ const translations = {
     'login.supervisor': 'पर्यवेक्षक',
     'login.engineer': 'इंजीनियर',
     'login.owner': 'मालिक',
+    'login.site_supervisor': 'साइट पर्यवेक्षक',
+    'login.junior_engineer': 'जूनियर साइट इंजीनियर',
+    'login.senior_engineer': 'सीनियर साइट इंजीनियर',
+    'login.site_manager': 'साइट मैनेजर',
+    'login.site_owner': 'साइट मालिक',
     'login.selectLanguage': 'भाषा चुनें',
     
     // Home
@@ -289,6 +299,11 @@ const translations = {
     'login.supervisor': 'पर्यवेक्षक',
     'login.engineer': 'अभियंता',
     'login.owner': 'मालक',
+    'login.site_supervisor': 'साइट पर्यवेक्षक',
+    'login.junior_engineer': 'ज्युनियर साइट अभियंता',
+    'login.senior_engineer': 'सीनियर साइट अभियंता',
+    'login.site_manager': 'साइट व्यवस्थापक',
+    'login.site_owner': 'साइट मालक',
     'login.selectLanguage': 'भाषा निवडा',
     
     // Home
@@ -371,6 +386,11 @@ const translations = {
     'login.supervisor': 'மேற்பார்வையாளர்',
     'login.engineer': 'பொறியாளர்',
     'login.owner': 'உரிமையாளர்',
+    'login.site_supervisor': 'தள மேற்பார்வையாளர்',
+    'login.junior_engineer': 'இளைய தள பொறியாளர்',
+    'login.senior_engineer': 'மூத்த தள பொறியாளர்',
+    'login.site_manager': 'தள மேலாளர்',
+    'login.site_owner': 'தள உரிமையாளர்',
     'login.selectLanguage': 'மொழியைத் தேர்ந்தெடுக்கவும்',
     
     // Home

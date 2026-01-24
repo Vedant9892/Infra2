@@ -140,6 +140,9 @@ export default function HomeScreen() {
   const [gpsCheckInterval, setGpsCheckInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const cameraRef = useRef<any>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
+  const [showPendingAttendanceModal, setShowPendingAttendanceModal] = useState(false);
+  const [pendingAttendance, setPendingAttendance] = useState<any[]>([]);
+  const [currentSiteId, setCurrentSiteId] = useState<string | number | null>(null);
   const [materialRequests, setMaterialRequests] = useState<MaterialRequest[]>([]);
   const [newMaterialRequest, setNewMaterialRequest] = useState({
     materialName: '',
@@ -293,74 +296,79 @@ export default function HomeScreen() {
         return;
       }
 
-      // For Owner role, skip geofencing check
-      if (user?.role === 'owner') {
+      // For Owner/Manager roles, skip geofencing check
+      if (user?.role === 'owner' || user?.role === 'site_manager') {
         setShowAttendanceModal(true);
         return;
       }
 
-      // Sample registered sites - in production, fetch from backend
-      const registeredSites = [
-        {
-          id: '1',
-          name: 'Mumbai Residential Complex',
-          latitude: 19.1136,
-          longitude: 72.8697,
-          radius: 100,
-        },
-        {
-          id: '2',
-          name: 'Tech Park Construction',
-          latitude: 19.0596,
-          longitude: 72.8656,
-          radius: 150,
-        },
-        {
-          id: '3',
-          name: 'Highway Bridge Project',
-          latitude: 19.2183,
-          longitude: 72.9781,
-          radius: 200,
-        },
-      ];
+      // For Labour: Fetch their assigned sites and check GPS
+      if (user?.role === 'labour' && user?.id) {
+        try {
+          // Fetch sites assigned to this labour user
+          const sitesResponse = await fetch(`${API_BASE_URL}/api/sites/labour/${user.id}`);
+          const sitesData = await sitesResponse.json();
 
-      // Check if user is within any registered site
-      const userLat = location.coords.latitude;
-      const userLon = location.coords.longitude;
+          if (!sitesData.success || !sitesData.sites || sitesData.sites.length === 0) {
+            Alert.alert(
+              'No Site Assigned',
+              'You are not assigned to any site yet. Please contact your supervisor to get enrolled.',
+              [{ text: 'OK' }]
+            );
+            return;
+          }
 
-      let isWithinSite = false;
-      let nearestSite = '';
+          const registeredSites = sitesData.sites;
+          const userLat = location.coords.latitude;
+          const userLon = location.coords.longitude;
 
-      for (const site of registeredSites) {
-        const distance = calculateDistance(userLat, userLon, site.latitude, site.longitude);
+          let isWithinSite = false;
+          let nearestSite: any = null;
+          let minDistance = Infinity;
 
-        if (distance <= site.radius) {
-          isWithinSite = true;
-          nearestSite = site.name;
-          break;
+          // Check if user is within any assigned site's radius
+          for (const site of registeredSites) {
+            const distance = calculateDistance(userLat, userLon, site.latitude, site.longitude);
+
+            if (distance <= site.radius) {
+              isWithinSite = true;
+              nearestSite = site;
+              break;
+            }
+
+            // Track nearest site for error message
+            if (distance < minDistance) {
+              minDistance = distance;
+              nearestSite = site;
+            }
+          }
+
+          if (!isWithinSite) {
+            const distanceText = nearestSite ? `You are ${Math.round(minDistance)}m away from "${nearestSite.name}" (radius: ${nearestSite.radius}m).` : '';
+            Alert.alert(
+              'Location Restricted',
+              `You must be within the site radius to mark attendance.\n\n${distanceText}\n\nPlease move closer to the site center.`,
+              [{ text: 'OK' }]
+            );
+            return;
+          }
+
+          // Store the site ID for attendance marking (MongoDB uses string IDs)
+          if (nearestSite) {
+            setCurrentSiteId(nearestSite.id);
+            console.log(`📍 Site detected: ${nearestSite.name} (ID: ${nearestSite.id})`);
+          }
+
+          // User is within site boundaries, allow attendance
+          setShowAttendanceModal(true);
+        } catch (error) {
+          console.error('Fetch sites error:', error);
+          Alert.alert('Error', 'Failed to fetch your assigned sites. Please try again.');
         }
+      } else {
+        // For other roles, allow attendance
+        setShowAttendanceModal(true);
       }
-
-      if (!isWithinSite) {
-        Alert.alert(
-          'Location Restricted',
-          'You must be at a registered construction site to mark attendance. Please contact your site supervisor if this is an error.',
-          [{ text: 'OK' }]
-        );
-        return;
-      }
-
-      // User is within site boundaries, allow attendance
-      Alert.alert(
-        'Site Verified',
-        `You are at: ${nearestSite}`,
-        [
-          {
-            text: 'Continue',
-            onPress: () => setShowAttendanceModal(true),
-          },
-        ]
-      );
     }
   };
 
@@ -455,32 +463,126 @@ export default function HomeScreen() {
       Alert.alert('Location Required', 'Please enable location');
       return;
     }
+    if (!user?.id || !user?.currentSiteId) {
+      Alert.alert('Error', 'Site assignment required. Please enroll in a site first.');
+      return;
+    }
 
-    const record: AttendanceRecord = {
-      id: Date.now().toString(),
-      userId: user?.name || 'User',
-      timestamp: new Date(),
-      photoUri: capturedPhoto,
-      proofPhotos: proofPhotos, // Include proof photos
-      latitude: currentLocation.coords.latitude,
-      longitude: currentLocation.coords.longitude,
-      address: locationAddress, // Include address
-      status: 'present',
-    };
+    try {
+      // Use currentSiteId if set (from GPS check), otherwise use user.currentSiteId
+      const siteIdToUse = currentSiteId || user?.currentSiteId;
+      
+      if (!siteIdToUse) {
+        Alert.alert('Error', 'No site assigned. Please contact your supervisor.');
+        return;
+      }
 
-    setAttendanceRecords([...attendanceRecords, record]);
-    Alert.alert(
-      'Attendance Marked!',
-      `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nLocation: ${locationAddress}\n\nGPS tracking enabled: Your location will be verified every 2 hours to ensure on-site presence.`,
-      [{
-        text: 'OK', onPress: () => {
-          setShowAttendanceModal(false);
-          setCapturedPhoto(null);
-          setProofPhotos([]);
-        }
-      }]
-    );
+      // Convert siteId to string if it's a MongoDB ObjectId, otherwise keep as number
+      const siteIdForApi = typeof siteIdToUse === 'string' ? siteIdToUse : String(siteIdToUse);
+      
+      console.log(`📤 Marking attendance: userId=${user.id}, siteId=${siteIdForApi}`);
+
+      const response = await fetch(`${API_BASE_URL}/api/attendance/mark`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id, // Keep as string if MongoDB ID
+          siteId: siteIdForApi, // MongoDB uses string IDs
+          photoUri: capturedPhoto,
+          gpsLat: currentLocation.coords.latitude,
+          gpsLon: currentLocation.coords.longitude,
+          timestamp: new Date().toISOString(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const record: AttendanceRecord = {
+          id: data.attendance.id.toString(),
+          userId: user.id,
+          timestamp: new Date(),
+          photoUri: capturedPhoto,
+          proofPhotos: proofPhotos,
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+          address: locationAddress,
+          status: 'present',
+        };
+
+        setAttendanceRecords([...attendanceRecords, record]);
+        Alert.alert(
+          'Attendance Marked!',
+          `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nLocation: ${locationAddress}\n\nWaiting for supervisor approval.`,
+          [{
+            text: 'OK', onPress: () => {
+              setShowAttendanceModal(false);
+              setCapturedPhoto(null);
+              setProofPhotos([]);
+            }
+          }]
+        );
+      } else {
+        Alert.alert('Error', data.error || data.message || 'Failed to mark attendance');
+      }
+    } catch (error) {
+      console.error('Mark attendance error:', error);
+      Alert.alert('Error', 'Failed to mark attendance. Please try again.');
+    }
   };
+
+  // Supervisor: Fetch pending attendance
+  const fetchPendingAttendance = async () => {
+    if (!user?.id || !user?.currentSiteId) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/attendance/pending?siteId=${user.currentSiteId}&supervisorId=${user.id}`);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setPendingAttendance(data.pending || []);
+        setCurrentSiteId(Number(user.currentSiteId));
+      }
+    } catch (error) {
+      console.error('Fetch pending attendance error:', error);
+    }
+  };
+
+  // Supervisor: Approve or reject attendance
+  const handleApproveAttendance = async (attendanceId: number, approved: boolean) => {
+    if (!user?.id) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/attendance/${attendanceId}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          approved: approved,
+          supervisorId: Number(user.id),
+          reason: approved ? undefined : 'Rejected by supervisor',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        Alert.alert('Success', data.message || (approved ? 'Attendance approved' : 'Attendance rejected'));
+        fetchPendingAttendance(); // Refresh list
+      } else {
+        Alert.alert('Error', data.error || 'Failed to update attendance');
+      }
+    } catch (error) {
+      console.error('Approve attendance error:', error);
+      Alert.alert('Error', 'Failed to update attendance. Please try again.');
+    }
+  };
+
+  // Load pending attendance when supervisor opens home
+  useEffect(() => {
+    if (user?.role === 'site_supervisor' && user?.currentSiteId) {
+      fetchPendingAttendance();
+    }
+  }, [user?.role, user?.currentSiteId]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -555,9 +657,9 @@ export default function HomeScreen() {
           { id: 'site-docs', icon: 'camera', title: 'Site Documentation', subtitle: 'Upload work photos', color: '#F59E0B' },
           { id: 'chat', icon: 'chatbubbles', title: 'Chat with Supervisor', subtitle: 'Report & communicate', color: '#3B82F6' },
         ];
-      case 'supervisor':
+      case 'site_supervisor':
         return [
-          { id: 'verify', icon: 'checkmark-circle', title: 'Verify Attendance', subtitle: 'Approve labour check-ins', color: '#8B5CF6' },
+          { id: 'verify', icon: 'checkmark-circle', title: 'Verify Attendance', subtitle: `${pendingAttendance.length} pending`, color: '#8B5CF6' },
           { id: 'assign', icon: 'people', title: 'Assign Tasks', subtitle: 'Delegate to labour', color: '#10B981' },
           { id: 'approve', icon: 'document-text', title: 'Approve Work', subtitle: 'Site photos & documentation', color: '#3B82F6' },
           { id: 'access', icon: 'shield-checkmark', title: 'Access Control', subtitle: 'Manage permissions', color: '#EF4444' },
@@ -605,7 +707,10 @@ export default function HomeScreen() {
     } else if (featureId === 'site-docs') {
       // Upload site documentation
       Alert.alert('Site Documentation', 'Upload work photos and documents');
-    } else if (featureId === 'verify' || featureId === 'assign' || featureId === 'approve' || featureId === 'access') {
+    } else if (featureId === 'verify') {
+      setShowPendingAttendanceModal(true);
+      fetchPendingAttendance();
+    } else if (featureId === 'assign' || featureId === 'approve' || featureId === 'access') {
       Alert.alert('Coming Soon', `${featureId} feature will be available soon`);
     } else if (featureId === 'onsite' || featureId === 'approvals' || featureId === 'assign-task') {
       Alert.alert('Coming Soon', `${featureId} feature will be available soon`);
@@ -1389,8 +1494,83 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* Pending Attendance Modal - Supervisor */}
+      <Modal
+        visible={showPendingAttendanceModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPendingAttendanceModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowPendingAttendanceModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Pending Attendance Approvals</Text>
+              <TouchableOpacity onPress={() => setShowPendingAttendanceModal(false)}>
+                <Ionicons name="close" size={28} color="#111" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {pendingAttendance.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="checkmark-circle-outline" size={48} color="#9CA3AF" />
+                  <Text style={styles.emptyStateText}>No pending attendance requests</Text>
+                </View>
+              ) : (
+                pendingAttendance.map((attendance: any) => (
+                  <View key={attendance.id} style={styles.requestCard}>
+                    <View style={styles.requestHeader}>
+                      <View style={styles.requestInfo}>
+                        {attendance.photoUri && (
+                          <Image source={{ uri: attendance.photoUri }} style={styles.attendancePhoto} />
+                        )}
+                        <View style={styles.requestDetails}>
+                          <Text style={styles.requestMaterial}>Worker ID: {attendance.userId}</Text>
+                          <Text style={styles.requestQuantity}>
+                            {format(new Date(attendance.date), 'MMM dd, hh:mm a')}
+                          </Text>
+                          {attendance.shiftSlot && (
+                            <Text style={styles.metaText}>Shift: {attendance.shiftSlot}</Text>
+                          )}
+                          {attendance.gpsLat && attendance.gpsLon && (
+                            <Text style={styles.metaText}>
+                              📍 {parseFloat(attendance.gpsLat).toFixed(4)}, {parseFloat(attendance.gpsLon).toFixed(4)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.approvalActions}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.rejectButton]}
+                        onPress={() => handleApproveAttendance(attendance.id, false)}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#EF4444" />
+                        <Text style={styles.rejectButtonText}>Reject</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.approveButton]}
+                        onPress={() => handleApproveAttendance(attendance.id, true)}
+                      >
+                        <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                        <Text style={styles.approveButtonText}>Approve</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
       {/* Attendance Records Section - Show only for supervisors/engineers/owners */}
-      {user && ['supervisor', 'engineer', 'owner'].includes(user.role) && attendanceRecords.length > 0 && (
+      {user && ['site_supervisor', 'junior_engineer', 'senior_engineer', 'site_manager', 'site_owner'].includes(user.role) && attendanceRecords.length > 0 && (
         <Modal
           visible={false}
           transparent
@@ -2054,6 +2234,13 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: 12,
+  },
+  attendancePhoto: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#F3F4F6',
   },
   recordDetails: {
     flex: 1,

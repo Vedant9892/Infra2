@@ -17,6 +17,8 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(owner)" />
+            <Stack.Screen name="(labour)" />
+            <Stack.Screen name="(supervisor)" />
           </Stack>
         </QueryClientProvider>
       </UserProvider>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, SafeAreaView } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -7,10 +7,14 @@ import { styles } from './_styles';
 import { CreateSiteStep, SiteFormData } from './_types';
 import SiteForm from './SiteForm';
 import SiteBoundary from './SiteBoundary';
+import { useUser } from '../../../contexts/UserContext';
+import { API_BASE_URL } from '../../../constants/api';
 
 export default function CreateSiteWizard() {
     const router = useRouter();
+    const { user } = useUser();
     const [step, setStep] = useState<CreateSiteStep>('details');
+    const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<SiteFormData>({
         name: '',
         description: '',
@@ -44,19 +48,57 @@ export default function CreateSiteWizard() {
     };
 
     const handleSubmit = async () => {
-        if (formData.boundary.length < 3) {
-            Alert.alert('Invalid Boundary', 'Please mark at least 3 points to create a valid site boundary.');
-            return;
+        // For web, we don't require boundary points - just GPS center and radius
+        // if (formData.boundary.length < 3) {
+        //     Alert.alert('Invalid Boundary', 'Please mark at least 3 points to create a valid site boundary.');
+        //     return;
+        // }
+        
+        // Radius validation removed - use default if not set
+
+        setLoading(true);
+        try {
+            const payload = {
+                ownerId: user?.id,
+                name: formData.name,
+                description: formData.description,
+                address: formData.address,
+                latitude: formData.latitude,
+                longitude: formData.longitude,
+                radius: formData.radius || 100, // Default 100m if not set
+                boundary: formData.boundary,
+                overlayImage: formData.overlayImage,
+                overlaySettings: formData.overlaySettings,
+                projectType: 'residential'
+            };
+
+            console.log('Creating site:', payload);
+
+            const response = await fetch(`${API_BASE_URL}/api/sites`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                Alert.alert(
+                    'Success',
+                    'Site created successfully!',
+                    [{ text: 'OK', onPress: () => router.replace('/(owner)/sites') }]
+                );
+            } else {
+                Alert.alert('Error', data.message || 'Failed to create site');
+            }
+        } catch (error) {
+            console.error('Create site error:', error);
+            Alert.alert('Error', 'Failed to create site. Please try again.');
+        } finally {
+            setLoading(false);
         }
-
-        // TODO: Submit to backend
-        console.log('Submitting Site:', formData);
-
-        Alert.alert(
-            'Success',
-            'Site created successfully!',
-            [{ text: 'OK', onPress: () => router.replace('/(owner)/sites') }]
-        );
     };
 
     return (

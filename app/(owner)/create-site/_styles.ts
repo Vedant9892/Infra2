@@ -234,3 +234,6 @@ export const styles = StyleSheet.create({
         position: 'relative',
     },
 });
+
+// Default export to prevent Expo Router from treating this as a route
+export default null;

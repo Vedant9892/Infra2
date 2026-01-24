@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { API_BASE_URL } from '../constants/api';
 
-type Role = 'labour' | 'supervisor' | 'engineer' | 'owner';
+type Role = 'labour' | 'site_supervisor' | 'junior_engineer' | 'senior_engineer' | 'site_manager' | 'site_owner';
 
 interface UserData {
   id?: string; // MongoDB ObjectId
@@ -31,7 +31,9 @@ interface UserData {
 
 interface UserContextType {
   user: UserData | null;
+  token: string | null; // JWT token for labour API authentication
   setUser: (user: UserData) => void;
+  setToken: (token: string | null) => void;
   logout: () => void;
   refreshUser?: () => Promise<void>; // Function to refresh user data
 }
@@ -40,9 +42,11 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   const logout = () => {
     setUser(null);
+    setToken(null);
   };
 
   const refreshUser = async () => {
@@ -52,7 +56,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <UserContext.Provider value={{ user, setUser, logout, refreshUser }}>
+    <UserContext.Provider value={{ user, token, setUser, setToken, logout, refreshUser }}>
       {children}
     </UserContext.Provider>
   );
