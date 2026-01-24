@@ -40,8 +40,10 @@ type AttendanceRecord = {
   userId: string;
   timestamp: Date;
   photoUri: string;
+  proofPhotos: string[]; // Additional proof photos
   latitude: number;
   longitude: number;
+  address: string; // Human-readable address
   status: 'present' | 'absent';
 };
 
@@ -133,6 +135,8 @@ export default function HomeScreen() {
   const [locationPermission, requestLocationPermission] = Location.useForegroundPermissions();
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [proofPhotos, setProofPhotos] = useState<string[]>([]); // Array of proof photos
+  const [locationAddress, setLocationAddress] = useState<string>('Fetching address...'); // GPS address
   const [gpsCheckInterval, setGpsCheckInterval] = useState<ReturnType<typeof setInterval> | null>(null);
   const cameraRef = useRef<any>(null);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
@@ -144,7 +148,7 @@ export default function HomeScreen() {
     priority: 'medium' as 'low' | 'medium' | 'high',
     reason: '',
   });
-  
+
   // Stock Tracking States
   const [showStockModal, setShowStockModal] = useState(false);
   const [stockItems, setStockItems] = useState<StockItem[]>([
@@ -152,7 +156,7 @@ export default function HomeScreen() {
     { id: '2', materialName: 'Steel Rods', quantity: 25, unit: 'ton', location: 'Site B', lastUpdated: new Date(), reorderLevel: 30, status: 'low' },
     { id: '3', materialName: 'Bricks', quantity: 5000, unit: 'pcs', location: 'Warehouse A', lastUpdated: new Date(), reorderLevel: 2000, status: 'adequate' },
   ]);
-  
+
   // GST Bill States
   const [showGSTModal, setShowGSTModal] = useState(false);
   const [gstBills, setGSTBills] = useState<GSTBill[]>([]);
@@ -161,7 +165,7 @@ export default function HomeScreen() {
     vendorGST: '',
     items: [{ name: '', quantity: '', rate: '', gst: '18' }],
   });
-  
+
   const { t } = useLanguage();
   const { user } = useUser();
   const router = useRouter();
@@ -204,7 +208,7 @@ export default function HomeScreen() {
   const requestPermissions = async () => {
     const locStatus = await requestLocationPermission();
     const camStatus = await requestCameraPermission();
-    
+
     if (!locStatus?.granted) {
       Alert.alert('Permission Required', 'Location permission is required for attendance');
       return false;
@@ -229,6 +233,40 @@ export default function HomeScreen() {
     }
   };
 
+  // Reverse geocoding to get address from coordinates
+  const getAddressFromCoords = async (latitude: number, longitude: number) => {
+    try {
+      const addresses = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (addresses && addresses.length > 0) {
+        const addr = addresses[0];
+        const formattedAddress = [
+          addr.street || addr.name,
+          addr.district || addr.subregion,
+          addr.city,
+          addr.region,
+          addr.postalCode
+        ]
+          .filter(Boolean)
+          .join(', ');
+        return formattedAddress || 'Address not available';
+      }
+      return 'Address not available';
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return 'Address not available';
+    }
+  };
+
+  // Update address when location changes
+  useEffect(() => {
+    if (currentLocation) {
+      getAddressFromCoords(
+        currentLocation.coords.latitude,
+        currentLocation.coords.longitude
+      ).then(setLocationAddress);
+    }
+  }, [currentLocation]);
+
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371e3; // Earth's radius in meters
@@ -249,7 +287,7 @@ export default function HomeScreen() {
     const hasPermissions = await requestPermissions();
     if (hasPermissions) {
       const location = await getCurrentLocation();
-      
+
       if (!location) {
         Alert.alert('Error', 'Unable to get your current location');
         return;
@@ -289,13 +327,13 @@ export default function HomeScreen() {
       // Check if user is within any registered site
       const userLat = location.coords.latitude;
       const userLon = location.coords.longitude;
-      
+
       let isWithinSite = false;
       let nearestSite = '';
 
       for (const site of registeredSites) {
         const distance = calculateDistance(userLat, userLon, site.latitude, site.longitude);
-        
+
         if (distance <= site.radius) {
           isWithinSite = true;
           nearestSite = site.name;
@@ -326,13 +364,13 @@ export default function HomeScreen() {
     }
   };
 
-  const handleOpenCamera = async () => {
-    console.log('handleOpenCamera called - using ImagePicker');
-    
+  const handleOpenCamera = async (photoType: 'selfie' | 'proof' = 'selfie') => {
+    console.log(`handleOpenCamera called - type: ${photoType}`);
+
     try {
       // Request camera permission
       const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (!permissionResult.granted) {
         Alert.alert('Camera Permission', 'Camera access is required to take a live photo');
         return;
@@ -343,7 +381,7 @@ export default function HomeScreen() {
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
-        cameraType: ImagePicker.CameraType.front,
+        cameraType: photoType === 'selfie' ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
       });
 
       console.log('Camera result:', result);
@@ -351,8 +389,19 @@ export default function HomeScreen() {
       if (!result.canceled && result.assets && result.assets[0]) {
         const photoUri = result.assets[0].uri;
         console.log('Photo captured:', photoUri);
-        setCapturedPhoto(photoUri);
-        Alert.alert('Success', 'Photo captured successfully!');
+
+        if (photoType === 'selfie') {
+          setCapturedPhoto(photoUri);
+          Alert.alert('Success', 'Selfie captured successfully!');
+        } else {
+          // Add to proof photos array (max 3)
+          if (proofPhotos.length < 3) {
+            setProofPhotos([...proofPhotos, photoUri]);
+            Alert.alert('Success', `Proof photo ${proofPhotos.length + 1} captured!`);
+          } else {
+            Alert.alert('Limit Reached', 'You can only add up to 3 proof photos.');
+          }
+        }
       }
     } catch (error) {
       console.error('Camera error:', error);
@@ -360,11 +409,15 @@ export default function HomeScreen() {
     }
   };
 
+  const handleRemoveProofPhoto = (index: number) => {
+    setProofPhotos(proofPhotos.filter((_, i) => i !== index));
+  };
+
   const handleTakePhoto = async () => {
     console.log('handleTakePhoto called');
     Alert.alert('Debug', 'Take photo button pressed!');
     console.log('Camera ref:', cameraRef.current);
-    
+
     if (!cameraRef.current) {
       console.error('Camera ref is null');
       Alert.alert('Error', 'Camera not ready');
@@ -377,7 +430,7 @@ export default function HomeScreen() {
         quality: 0.8,
         base64: false,
       });
-      
+
       console.log('Photo captured:', photo);
 
       if (photo && photo.uri) {
@@ -393,9 +446,9 @@ export default function HomeScreen() {
       console.error('Photo capture error:', error);
       Alert.alert('Error', `Failed to capture photo: ${error?.message || 'Unknown error'}`);
     }
-  };  const handleMarkPresent = async () => {
+  }; const handleMarkPresent = async () => {
     if (!capturedPhoto) {
-      Alert.alert('Photo Required', 'Please capture a live photo');
+      Alert.alert('Photo Required', 'Please capture a selfie');
       return;
     }
     if (!currentLocation) {
@@ -408,19 +461,24 @@ export default function HomeScreen() {
       userId: user?.name || 'User',
       timestamp: new Date(),
       photoUri: capturedPhoto,
+      proofPhotos: proofPhotos, // Include proof photos
       latitude: currentLocation.coords.latitude,
       longitude: currentLocation.coords.longitude,
+      address: locationAddress, // Include address
       status: 'present',
     };
 
     setAttendanceRecords([...attendanceRecords, record]);
     Alert.alert(
       'Attendance Marked!',
-      `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nGPS tracking enabled: Your location will be verified every 2 hours to ensure on-site presence.`,
-      [{ text: 'OK', onPress: () => {
-        setShowAttendanceModal(false);
-        setCapturedPhoto(null);
-      }}]
+      `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nLocation: ${locationAddress}\n\nGPS tracking enabled: Your location will be verified every 2 hours to ensure on-site presence.`,
+      [{
+        text: 'OK', onPress: () => {
+          setShowAttendanceModal(false);
+          setCapturedPhoto(null);
+          setProofPhotos([]);
+        }
+      }]
     );
   };
 
@@ -469,8 +527,8 @@ export default function HomeScreen() {
   };
 
   const handleApproveMaterial = (requestId: string) => {
-    setMaterialRequests(materialRequests.map(req => 
-      req.id === requestId 
+    setMaterialRequests(materialRequests.map(req =>
+      req.id === requestId
         ? { ...req, status: 'approved', approvedBy: user?.name, approvedAt: new Date() }
         : req
     ));
@@ -478,8 +536,8 @@ export default function HomeScreen() {
   };
 
   const handleRejectMaterial = (requestId: string, reason: string) => {
-    setMaterialRequests(materialRequests.map(req => 
-      req.id === requestId 
+    setMaterialRequests(materialRequests.map(req =>
+      req.id === requestId
         ? { ...req, status: 'rejected', rejectionReason: reason }
         : req
     ));
@@ -488,7 +546,7 @@ export default function HomeScreen() {
 
   const getRoleFeatures = () => {
     if (!user) return [];
-    
+
     switch (user.role) {
       case 'labour':
         return [
@@ -669,7 +727,7 @@ export default function HomeScreen() {
         onRequestClose={() => setShowAttendanceModal(false)}
         supportedOrientations={['portrait']}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => {
@@ -677,7 +735,7 @@ export default function HomeScreen() {
             setCapturedPhoto(null);
           }}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={1}
             style={styles.modalContent}
             onPress={(e) => {
@@ -694,7 +752,7 @@ export default function HomeScreen() {
                 <Ionicons name="close" size={24} color="#111" />
               </TouchableOpacity>
             </View>
-            
+
             <View style={styles.modalBody}>
               <View style={styles.requirementItem}>
                 <Ionicons name="location" size={24} color="#8B5CF6" />
@@ -703,6 +761,11 @@ export default function HomeScreen() {
                   <Text style={styles.requirementSubtitle}>
                     {currentLocation ? `${currentLocation.coords.latitude.toFixed(4)}, ${currentLocation.coords.longitude.toFixed(4)}` : 'Detecting...'}
                   </Text>
+                  {currentLocation && (
+                    <Text style={[styles.requirementSubtitle, { fontSize: 11, marginTop: 4, color: '#10B981' }]}>
+                      📍 {locationAddress}
+                    </Text>
+                  )}
                 </View>
                 <Ionicons name={currentLocation ? "checkmark-circle" : "ellipse-outline"} size={24} color={currentLocation ? "#10B981" : "#9CA3AF"} />
               </View>
@@ -716,7 +779,7 @@ export default function HomeScreen() {
                 <Ionicons name="checkmark-circle" size={24} color="#10B981" />
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.requirementItem, styles.clickableItem]}
                 onPress={() => {
                   console.log('Live Photo section tapped');
@@ -742,9 +805,9 @@ export default function HomeScreen() {
               {capturedPhoto && (
                 <View style={styles.photoPreviewContainer}>
                   <Image source={{ uri: capturedPhoto }} style={styles.photoPreview} />
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.retakeButton}
-                    onPress={handleOpenCamera}
+                    onPress={() => handleOpenCamera('selfie')}
                     activeOpacity={0.8}
                   >
                     <Ionicons name="camera-reverse" size={16} color="#fff" />
@@ -754,7 +817,7 @@ export default function HomeScreen() {
               )}
 
               {/* Test Button */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={{
                   backgroundColor: '#8B5CF6',
                   padding: 16,
@@ -781,7 +844,7 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.markButton, (!capturedPhoto || !currentLocation) && styles.markButtonDisabled]}
               onPress={handleMarkPresent}
               disabled={!capturedPhoto || !currentLocation}
@@ -800,12 +863,12 @@ export default function HomeScreen() {
         animationType="slide"
         onRequestClose={() => setShowMaterialModal(false)}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowMaterialModal(false)}
         >
-          <TouchableOpacity 
+          <TouchableOpacity
             activeOpacity={1}
             style={[styles.modalContent, { maxHeight: '90%' }]}
             onPress={(e) => e.stopPropagation()}
@@ -824,7 +887,7 @@ export default function HomeScreen() {
               {user?.role === 'engineer' && (
                 <View style={styles.materialForm}>
                   <Text style={styles.materialSectionTitle}>Create New Request</Text>
-                  
+
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Material Name *</Text>
                     <View style={styles.inputWrapper}>
@@ -833,7 +896,7 @@ export default function HomeScreen() {
                         style={styles.textInput}
                         placeholder="e.g., Cement, Steel, Bricks"
                         value={newMaterialRequest.materialName}
-                        onChangeText={(text) => setNewMaterialRequest({...newMaterialRequest, materialName: text})}
+                        onChangeText={(text) => setNewMaterialRequest({ ...newMaterialRequest, materialName: text })}
                       />
                     </View>
                   </View>
@@ -847,7 +910,7 @@ export default function HomeScreen() {
                           placeholder="0"
                           keyboardType="numeric"
                           value={newMaterialRequest.quantity}
-                          onChangeText={(text) => setNewMaterialRequest({...newMaterialRequest, quantity: text})}
+                          onChangeText={(text) => setNewMaterialRequest({ ...newMaterialRequest, quantity: text })}
                         />
                       </View>
                     </View>
@@ -855,13 +918,13 @@ export default function HomeScreen() {
                     <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
                       <Text style={styles.inputLabel}>Unit</Text>
                       <View style={styles.inputWrapper}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                           style={styles.unitSelector}
                           onPress={() => {
                             const units = ['kg', 'ton', 'bag', 'pcs', 'm', 'm²', 'm³'];
                             const currentIndex = units.indexOf(newMaterialRequest.unit);
                             const nextIndex = (currentIndex + 1) % units.length;
-                            setNewMaterialRequest({...newMaterialRequest, unit: units[nextIndex]});
+                            setNewMaterialRequest({ ...newMaterialRequest, unit: units[nextIndex] });
                           }}
                         >
                           <Text style={styles.unitText}>{newMaterialRequest.unit}</Text>
@@ -884,7 +947,7 @@ export default function HomeScreen() {
                             priority === 'medium' && newMaterialRequest.priority === priority && { backgroundColor: '#F59E0B' },
                             priority === 'high' && newMaterialRequest.priority === priority && { backgroundColor: '#EF4444' },
                           ]}
-                          onPress={() => setNewMaterialRequest({...newMaterialRequest, priority})}
+                          onPress={() => setNewMaterialRequest({ ...newMaterialRequest, priority })}
                         >
                           <Text style={[
                             styles.priorityButtonText,
@@ -906,12 +969,12 @@ export default function HomeScreen() {
                         multiline
                         numberOfLines={3}
                         value={newMaterialRequest.reason}
-                        onChangeText={(text) => setNewMaterialRequest({...newMaterialRequest, reason: text})}
+                        onChangeText={(text) => setNewMaterialRequest({ ...newMaterialRequest, reason: text })}
                       />
                     </View>
                   </View>
 
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={styles.submitButton}
                     onPress={handleSubmitMaterialRequest}
                   >
@@ -926,7 +989,7 @@ export default function HomeScreen() {
                 <Text style={styles.materialSectionTitle}>
                   {user?.role === 'engineer' ? 'My Requests' : 'Pending Approvals'}
                 </Text>
-                
+
                 {materialRequests.length === 0 ? (
                   <View style={styles.emptyState}>
                     <Ionicons name="cube-outline" size={48} color="#9CA3AF" />
@@ -993,7 +1056,7 @@ export default function HomeScreen() {
                         {/* Approval Buttons for Owner/Manager */}
                         {user?.role === 'owner' && request.status === 'pending' && (
                           <View style={styles.approvalActions}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               style={[styles.actionButton, styles.rejectButton]}
                               onPress={() => {
                                 Alert.prompt(
@@ -1006,7 +1069,7 @@ export default function HomeScreen() {
                               <Ionicons name="close-circle" size={18} color="#EF4444" />
                               <Text style={styles.rejectButtonText}>Reject</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               style={[styles.actionButton, styles.approveButton]}
                               onPress={() => handleApproveMaterial(request.id)}
                             >
@@ -1031,9 +1094,9 @@ export default function HomeScreen() {
         transparent
         onRequestClose={() => setShowStockModal(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setShowStockModal(false)}
         >
           <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
@@ -1103,9 +1166,9 @@ export default function HomeScreen() {
         transparent
         onRequestClose={() => setShowGSTModal(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay} 
-          activeOpacity={1} 
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
           onPress={() => setShowGSTModal(false)}
         >
           <TouchableOpacity activeOpacity={1} style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
@@ -1120,13 +1183,13 @@ export default function HomeScreen() {
               {/* GST Bill Form */}
               <View style={styles.materialForm}>
                 <Text style={styles.materialSectionTitle}>Vendor Details</Text>
-                
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Vendor Name *</Text>
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={newGSTBill.vendorName}
-                      onChangeText={(text) => setNewGSTBill({...newGSTBill, vendorName: text})}
+                      onChangeText={(text) => setNewGSTBill({ ...newGSTBill, vendorName: text })}
                       placeholder="Enter vendor name"
                       style={styles.textInput}
                     />
@@ -1138,7 +1201,7 @@ export default function HomeScreen() {
                   <View style={styles.inputWrapper}>
                     <TextInput
                       value={newGSTBill.vendorGST}
-                      onChangeText={(text) => setNewGSTBill({...newGSTBill, vendorGST: text})}
+                      onChangeText={(text) => setNewGSTBill({ ...newGSTBill, vendorGST: text })}
                       placeholder="Enter GST number"
                       style={styles.textInput}
                       autoCapitalize="characters"
@@ -1147,7 +1210,7 @@ export default function HomeScreen() {
                 </View>
 
                 <Text style={styles.materialSectionTitle}>Bill Items</Text>
-                
+
                 {newGSTBill.items.map((item, index) => (
                   <View key={index} style={styles.billItemCard}>
                     <View style={styles.inputGroup}>
@@ -1157,7 +1220,7 @@ export default function HomeScreen() {
                         onChangeText={(text) => {
                           const items = [...newGSTBill.items];
                           items[index].name = text;
-                          setNewGSTBill({...newGSTBill, items});
+                          setNewGSTBill({ ...newGSTBill, items });
                         }}
                         placeholder="e.g., Cement Bags"
                         style={styles.textInput}
@@ -1165,14 +1228,14 @@ export default function HomeScreen() {
                     </View>
 
                     <View style={styles.inputRow}>
-                      <View style={[styles.inputGroup, {flex: 1}]}>
+                      <View style={[styles.inputGroup, { flex: 1 }]}>
                         <Text style={styles.inputLabel}>Qty</Text>
                         <TextInput
                           value={item.quantity}
                           onChangeText={(text) => {
                             const items = [...newGSTBill.items];
                             items[index].quantity = text;
-                            setNewGSTBill({...newGSTBill, items});
+                            setNewGSTBill({ ...newGSTBill, items });
                           }}
                           placeholder="0"
                           keyboardType="numeric"
@@ -1180,14 +1243,14 @@ export default function HomeScreen() {
                         />
                       </View>
 
-                      <View style={[styles.inputGroup, {flex: 1, marginLeft: 12}]}>
+                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
                         <Text style={styles.inputLabel}>Rate (₹)</Text>
                         <TextInput
                           value={item.rate}
                           onChangeText={(text) => {
                             const items = [...newGSTBill.items];
                             items[index].rate = text;
-                            setNewGSTBill({...newGSTBill, items});
+                            setNewGSTBill({ ...newGSTBill, items });
                           }}
                           placeholder="0"
                           keyboardType="numeric"
@@ -1195,14 +1258,14 @@ export default function HomeScreen() {
                         />
                       </View>
 
-                      <View style={[styles.inputGroup, {flex: 1, marginLeft: 12}]}>
+                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 12 }]}>
                         <Text style={styles.inputLabel}>GST %</Text>
                         <TextInput
                           value={item.gst}
                           onChangeText={(text) => {
                             const items = [...newGSTBill.items];
                             items[index].gst = text;
-                            setNewGSTBill({...newGSTBill, items});
+                            setNewGSTBill({ ...newGSTBill, items });
                           }}
                           placeholder="18"
                           keyboardType="numeric"
@@ -1213,7 +1276,7 @@ export default function HomeScreen() {
                   </View>
                 ))}
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.addItemButton}
                   onPress={() => {
                     setNewGSTBill({
@@ -1226,7 +1289,7 @@ export default function HomeScreen() {
                   <Text style={styles.addItemText}>Add Another Item</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.submitButton}
                   onPress={() => {
                     Alert.alert('Success', 'GST Invoice generated successfully');
@@ -1271,7 +1334,7 @@ export default function HomeScreen() {
         <View style={styles.cameraContainer}>
           {/* Camera View with no children */}
           {showCamera && (
-            <CameraView 
+            <CameraView
               ref={cameraRef}
               style={styles.cameraFullScreen}
               facing="front"
@@ -1280,12 +1343,12 @@ export default function HomeScreen() {
               }}
             />
           )}
-          
+
           {/* Separate overlay layer */}
           <View style={styles.cameraOverlayAbsolute}>
             <SafeAreaView style={styles.cameraOverlayContainer}>
               <StatusBar style="light" />
-              
+
               {/* Close Button */}
               <View>
                 <TouchableOpacity

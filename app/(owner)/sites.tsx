@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useUser } from '../../contexts/UserContext';
 
 type Site = {
   id: string;
@@ -30,6 +31,25 @@ type Site = {
 
 export default function Sites() {
   const router = useRouter();
+  const { logout } = useUser();
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: () => {
+            logout();
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  };
 
   // Sample sites data - in production, fetch from backend
   const [sites, setSites] = useState<Site[]>([
@@ -142,6 +162,12 @@ export default function Sites() {
               onPress={() => router.push('/(owner)/profile')}
             >
               <Ionicons name="person-circle-outline" size={28} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={26} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.addButton} onPress={handleAddSite}>
               <Ionicons name="add" size={24} color="#8B5CF6" />
@@ -353,6 +379,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   profileButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutButton: {
     width: 40,
     height: 40,
     borderRadius: 20,

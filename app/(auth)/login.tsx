@@ -22,6 +22,7 @@ export default function LoginScreen() {
   const { language, setLanguage, t } = useLanguage();
   const { setUser } = useUser();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showOtpScreen, setShowOtpScreen] = useState(false);
@@ -49,8 +50,9 @@ export default function LoginScreen() {
         setShowOtpScreen(false);
         setLoading(true);
 
-        // Call login API
-          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        // Different API calls based on auth mode
+        const endpoint = authMode === 'signup' ? '/api/auth/register' : '/api/auth/signin';
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -62,30 +64,46 @@ export default function LoginScreen() {
         const data = await response.json();
 
         if (data.success) {
-          const userId = data.userId;
-          console.log('✓ Login successful, userId:', userId);
-          
+          console.log(`✓ ${authMode === 'signup' ? 'Sign up' : 'Sign in'} successful`);
+
           // Update user context
           setUser({
             role: selectedRole!,
             phoneNumber,
-            name: '',
-            location: 'Mumbai, Maharashtra',
+            name: data.user?.name || '',
+            email: data.user?.email || '',
+            id: data.userId || data.user?._id,
+            location: data.user?.location || 'Mumbai, Maharashtra',
+            profilePhoto: data.user?.profilePhoto || null,
           });
 
-          // Navigate to profile setup
-          console.log('→ Navigating to SetupProfile');
-          router.replace({
-            pathname: '/(auth)/setup-profile',
-            params: { userId },
-          });
+          if (authMode === 'signup') {
+            // New user - go to profile setup
+            console.log('→ Navigating to SetupProfile');
+            router.replace({
+              pathname: '/(auth)/setup-profile',
+              params: { userId: data.userId, phoneNumber },
+            });
+          } else {
+            // Existing user - go to dashboard
+            console.log('→ Navigating to Dashboard');
+            const dashboardPath = selectedRole === 'owner' ? '/(owner)/sites' : '/(tabs)/home';
+            router.replace(dashboardPath);
+          }
         } else {
-          alert('Login failed. Please try again.');
+          // Handle specific error cases
+          if (authMode === 'signup' && data.message?.includes('already exists')) {
+            alert('Account already exists. Please sign in instead.');
+          } else if (authMode === 'signin' && data.message?.includes('not found')) {
+            alert('Account not found. Please sign up first.');
+          } else {
+            alert(data.message || `${authMode === 'signup' ? 'Sign up' : 'Sign in'} failed. Please try again.`);
+          }
           setShowOtpScreen(true);
         }
       } catch (error) {
-        console.error('Login error:', error);
-        alert('Error during login. Please try again.');
+        console.error('Auth error:', error);
+        alert('Error during authentication. Please try again.');
         setShowOtpScreen(true);
       } finally {
         setLoading(false);
@@ -196,8 +214,8 @@ export default function LoginScreen() {
             ))}
           </View>
 
-          <TouchableOpacity 
-            style={[styles.button, otp.every(d => d !== '') && styles.buttonActive]} 
+          <TouchableOpacity
+            style={[styles.button, otp.every(d => d !== '') && styles.buttonActive]}
             onPress={handleVerifyOtp}
             disabled={!otp.every(d => d !== '')}
           >
@@ -216,6 +234,70 @@ export default function LoginScreen() {
     );
   }
 
+  // Auth Mode Selection Screen (Sign In vs Sign Up)
+  if (selectedRole && !authMode) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="dark" />
+        <ScrollView contentContainerStyle={styles.content}>
+          <TouchableOpacity onPress={() => setSelectedRole(null)} style={styles.back}>
+            <Ionicons name="arrow-back" size={24} color={DESIGN.colors.primary} />
+            <Text style={styles.backText} allowFontScaling={false}>
+              Back
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.header}>
+            <Text style={styles.emoji}>🔐</Text>
+            <Text style={styles.title} allowFontScaling={false}>
+              Welcome!
+            </Text>
+            <Text style={styles.subtitle} allowFontScaling={false}>
+              How would you like to proceed?
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.authModeCard, { backgroundColor: '#E0F2FE' }]}
+            onPress={() => setAuthMode('signin')}
+          >
+            <View style={styles.authModeIcon}>
+              <Ionicons name="log-in-outline" size={32} color="#0284C7" />
+            </View>
+            <View style={styles.authModeContent}>
+              <Text style={styles.authModeTitle} allowFontScaling={false}>
+                Sign In to Existing Account
+              </Text>
+              <Text style={styles.authModeDesc} allowFontScaling={false}>
+                Already have an account? Sign in to continue
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#0284C7" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.authModeCard, { backgroundColor: '#F3E8FF' }]}
+            onPress={() => setAuthMode('signup')}
+          >
+            <View style={styles.authModeIcon}>
+              <Ionicons name="person-add-outline" size={32} color="#8B5CF6" />
+            </View>
+            <View style={styles.authModeContent}>
+              <Text style={styles.authModeTitle} allowFontScaling={false}>
+                Create New Account
+              </Text>
+              <Text style={styles.authModeDesc} allowFontScaling={false}>
+                New user? Create your account to get started
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#8B5CF6" />
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // Role Selection Screen
   if (!selectedRole) {
     return (
       <View style={styles.container}>
@@ -305,7 +387,7 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.content}>
-        <TouchableOpacity onPress={() => setSelectedRole(null)} style={styles.back}>
+        <TouchableOpacity onPress={() => setAuthMode(null)} style={styles.back}>
           <Ionicons name="arrow-back" size={24} color={DESIGN.colors.primary} />
           <Text style={styles.backText} allowFontScaling={false}>
             Back
@@ -343,8 +425,8 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        <TouchableOpacity 
-          style={[styles.button, phoneNumber.length === 10 && styles.buttonActive]} 
+        <TouchableOpacity
+          style={[styles.button, phoneNumber.length === 10 && styles.buttonActive]}
           onPress={handleSendOtp}
           disabled={phoneNumber.length !== 10}
         >
@@ -554,5 +636,37 @@ const styles = StyleSheet.create({
     color: DESIGN.colors.primary,
     fontSize: DESIGN.typography.body,
     fontWeight: '600',
+  },
+  authModeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: DESIGN.spacing.xl,
+    borderRadius: DESIGN.radius.lg,
+    marginBottom: DESIGN.spacing.lg,
+    ...DESIGN.shadow.sm,
+    elevation: 3,
+  },
+  authModeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: DESIGN.spacing.lg,
+  },
+  authModeContent: {
+    flex: 1,
+  },
+  authModeTitle: {
+    fontSize: DESIGN.typography.subtitle,
+    fontWeight: '700',
+    color: DESIGN.colors.text.primary,
+    marginBottom: DESIGN.spacing.xs,
+  },
+  authModeDesc: {
+    fontSize: DESIGN.typography.caption,
+    color: DESIGN.colors.text.secondary,
+    lineHeight: 16,
   },
 });

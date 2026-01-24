@@ -141,14 +141,31 @@ export default function SetupProfile() {
 
       const data = await apiResponse.json();
 
-      if (apiResponse.ok && data.success) {
-        console.log('✓ Profile saved successfully');
-        Alert.alert('Success', 'Profile setup completed!', [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(owner)/sites'),
-          },
-        ]);
+      if (apiResponse.ok) {
+        if (data.success) {
+          console.log('Profile completed successfully');
+
+          // Role-based navigation
+          let dashboardPath = '/(tabs)/home'; // Default for labour, supervisor, engineer
+
+          if (user?.role === 'owner') {
+            dashboardPath = '/(owner)/sites';
+          }
+
+          Alert.alert(
+            'Profile Completed!',
+            'Your profile has been set up successfully.',
+            [
+              {
+                text: 'Continue',
+                onPress: () => router.replace(dashboardPath),
+              },
+            ],
+            { cancelable: false }
+          );
+        } else {
+          Alert.alert('Error', data.message || 'Failed to save profile');
+        }
       } else {
         Alert.alert('Error', data.message || 'Failed to save profile');
       }
