@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+/** Supervisor Tasks – mock API only. No backend. */
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,46 +14,42 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../../contexts/UserContext';
-import { API_BASE_URL } from '../../../constants/api';
 import { DESIGN } from '../../../constants/designSystem';
+import { getTasks, onDataChange } from '../../../lib/mock-api';
 
 export default function SupervisorTasksScreen() {
   const { user } = useUser();
   const [tasks, setTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const siteId = user?.currentSiteId ?? 's1';
 
-  const fetchTasks = async () => {
-    if (!user?.id || !user?.currentSiteId) {
-      setTasks([]);
-      setLoading(false);
-      return;
-    }
-
+  const fetchTasks = useCallback(() => {
     setLoading(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/tasks?userId=${user.id}&role=site_supervisor&siteId=${user.currentSiteId}`
-      );
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setTasks(data.tasks || []);
-      } else {
-        setTasks([]);
-      }
-    } catch (error) {
-      console.error('Fetch tasks error:', error);
-      setTasks([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+    const list = getTasks(siteId);
+    setTasks(
+      list.map((t) => ({
+        id: t.id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        location: t.description || '—',
+        time: '—',
+        assignedToLabourId: t.assignedTo,
+      }))
+    );
+    setLoading(false);
+    setRefreshing(false);
+  }, [siteId]);
 
   useEffect(() => {
     fetchTasks();
-  }, [user?.id, user?.currentSiteId]);
+    // Auto-refresh when data changes
+    const unsubscribe = onDataChange(() => {
+      fetchTasks();
+    });
+    return unsubscribe;
+  }, [fetchTasks]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -60,22 +57,14 @@ export default function SupervisorTasksScreen() {
   };
 
   const handleAssignToLabour = (taskId: string) => {
-    Alert.alert('Assign Task', 'Select a labourer to assign this task to', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Assign',
-        onPress: () => {
-          Alert.alert('Coming Soon', 'Task assignment feature will be available soon');
-        },
-      },
-    ]);
+    Alert.alert('Assign Task', 'Select a labourer to assign this task');
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Tasks</Text>
+        <Text style={styles.headerTitle}>My Tasks (mock)</Text>
         <Text style={styles.headerSubtitle}>
           {tasks.length} task{tasks.length !== 1 ? 's' : ''} assigned
         </Text>
@@ -89,15 +78,13 @@ export default function SupervisorTasksScreen() {
         <ScrollView
           style={styles.scrollView}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DESIGN.colors.primary]} />}
         >
           {tasks.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="clipboard-outline" size={64} color="#9CA3AF" />
               <Text style={styles.emptyStateTitle}>No Tasks Assigned</Text>
-              <Text style={styles.emptyStateText}>
-                Tasks assigned by engineers will appear here
-              </Text>
+              <Text style={styles.emptyStateText}>Tasks from mock data will appear here</Text>
             </View>
           ) : (
             <View style={styles.list}>
@@ -115,22 +102,16 @@ export default function SupervisorTasksScreen() {
                       </Text>
                     </View>
                   </View>
-
-                  {!task.assignedToLabourId && (
+                  {!task.assignedToLabourId ? (
                     <TouchableOpacity
                       style={styles.assignButton}
                       onPress={() => handleAssignToLabour(task.id)}
                     >
-                      <Ionicons name="person-add" size={18} color={DESIGN.colors.primary} />
+                      <Ionicons name="person-add" size={18} color="#fff" />
                       <Text style={styles.assignButtonText}>Assign to Labour</Text>
                     </TouchableOpacity>
-                  )}
-
-                  {task.assignedToLabourId && (
-                    <View style={styles.assignedInfo}>
-                      <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                      <Text style={styles.assignedText}>Assigned to Labour</Text>
-                    </View>
+                  ) : (
+                    <Text style={styles.assignedText}>Assigned to labour</Text>
                   )}
                 </View>
               ))}
@@ -143,10 +124,7 @@ export default function SupervisorTasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DESIGN.colors.background,
-  },
+  container: { flex: 1, backgroundColor: DESIGN.colors.background },
   header: {
     paddingHorizontal: DESIGN.spacing.lg,
     paddingTop: DESIGN.spacing.md,
@@ -155,28 +133,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: DESIGN.colors.border,
   },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: DESIGN.colors.textSecondary,
-  },
-  loaderContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  list: {
-    padding: DESIGN.spacing.lg,
-    gap: DESIGN.spacing.md,
-  },
+  headerTitle: { fontSize: 24, fontWeight: '700', color: DESIGN.colors.text.primary, marginBottom: 4 },
+  headerSubtitle: { fontSize: 14, color: DESIGN.colors.text.secondary },
+  loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scrollView: { flex: 1 },
+  list: { padding: DESIGN.spacing.lg },
   card: {
     backgroundColor: DESIGN.colors.surface,
     borderRadius: DESIGN.radius.md,
@@ -185,91 +146,27 @@ const styles = StyleSheet.create({
     borderColor: DESIGN.colors.border,
     marginBottom: DESIGN.spacing.md,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: DESIGN.spacing.sm,
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  taskTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginBottom: 4,
-  },
-  taskLocation: {
-    fontSize: 12,
-    color: DESIGN.colors.textSecondary,
-    marginBottom: 2,
-  },
-  taskTime: {
-    fontSize: 12,
-    color: DESIGN.colors.textSecondary,
-  },
-  statusBadge: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  statusBadgeCompleted: {
-    backgroundColor: '#D1FAE5',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#F59E0B',
-    textTransform: 'capitalize',
-  },
-  statusTextCompleted: {
-    color: '#10B981',
-  },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: DESIGN.spacing.md },
+  cardInfo: { flex: 1 },
+  taskTitle: { fontSize: 16, fontWeight: '700', color: DESIGN.colors.text.primary },
+  taskLocation: { fontSize: 13, color: DESIGN.colors.text.secondary, marginTop: 4 },
+  taskTime: { fontSize: 13, color: DESIGN.colors.text.secondary, marginTop: 2 },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FEF3C7' },
+  statusBadgeCompleted: { backgroundColor: '#D1FAE5' },
+  statusText: { fontSize: 12, fontWeight: '600', color: DESIGN.colors.text.primary },
+  statusTextCompleted: { color: DESIGN.colors.success },
   assignButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F3E8FF',
-    paddingVertical: DESIGN.spacing.sm,
+    gap: 8,
+    backgroundColor: DESIGN.colors.primary,
+    paddingVertical: 12,
     borderRadius: DESIGN.radius.sm,
-    marginTop: DESIGN.spacing.sm,
-    gap: 6,
   },
-  assignButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DESIGN.colors.primary,
-  },
-  assignedInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: DESIGN.spacing.sm,
-    gap: 6,
-  },
-  assignedText: {
-    fontSize: 12,
-    color: '#10B981',
-    fontWeight: '600',
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: DESIGN.spacing.xl * 2,
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginTop: DESIGN.spacing.md,
-    marginBottom: DESIGN.spacing.sm,
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: DESIGN.colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: DESIGN.spacing.xl,
-  },
+  assignButtonText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  assignedText: { fontSize: 13, color: DESIGN.colors.text.secondary, textAlign: 'center', paddingVertical: 8 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: DESIGN.spacing.xl * 2 },
+  emptyStateTitle: { fontSize: 18, fontWeight: '700', color: DESIGN.colors.text.primary, marginTop: 16 },
+  emptyStateText: { fontSize: 14, color: DESIGN.colors.text.secondary, textAlign: 'center', marginTop: 8 },
 });

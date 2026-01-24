@@ -45,4 +45,25 @@ export const LABOUR_ENDPOINTS = {
   DASHBOARD: {
     GET_DATA: (siteId: string) => `/api/dashboard/site/${siteId}`,
   },
+  TOOLS: {
+    LIST_BY_SITE: (siteId: string) => `/api/tools/site/${siteId}`,
+    MY_REQUESTS: (siteId: string) => `/api/tools/my-requests/${siteId}`,
+    REQUEST: '/api/tools/request',
+    RETURN: (requestId: string) => `/api/tools/return/${requestId}`,
+  },
+};
+
+export const STOCK_ENDPOINTS = {
+  GET_ALL: (siteId: string) => `/api/stock/${siteId}`,
+  CREATE: '/api/stock',
+  UPDATE: (id: string) => `/api/stock/${id}`,
+  DELETE: (id: string) => `/api/stock/${id}`,
+};
+
+export const BILLS_ENDPOINTS = {
+  GET_ALL: (siteId: string) => `/api/bills/${siteId}`,
+  CREATE: '/api/bills',
+  UPDATE: (id: string) => `/api/bills/${id}`,
+  DELETE: (id: string) => `/api/bills/${id}`,
+  OCR: '/api/bills/ocr',
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,15 +15,30 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { format, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useUser } from '../../contexts/UserContext';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { API_BASE_URL } from '../../constants/api';
 import { DESIGN } from '../../constants/designSystem';
+import { DashboardHeader } from '../../components/DashboardHeader';
+import { DashboardQuickActions, type QuickAction } from '../../components/DashboardQuickActions';
+import { DashboardDateStrip } from '../../components/DashboardDateStrip';
+import { DashboardYourTasks } from '../../components/DashboardYourTasks';
+import {
+  markAttendance,
+  getAttendancePending,
+  approveAttendance,
+  getMaterialRequests,
+  requestMaterial,
+  approveMaterialRequest,
+  getTasks,
+  updateTaskStatus,
+  getSitesForLabour,
+  onDataChange,
+} from '../../lib/mock-api';
 
 type Task = {
   id: string;
@@ -60,6 +75,7 @@ type MaterialRequest = {
   materialName: string;
   quantity: number;
   unit: string;
+  rate?: number;
   priority: 'low' | 'medium' | 'high';
   status: 'pending' | 'approved' | 'rejected';
   reason: string;
@@ -127,7 +143,7 @@ const mockTasks: Task[] = [
 
 export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [tasks, setTasks] = useState(mockTasks);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
@@ -148,6 +164,7 @@ export default function HomeScreen() {
     materialName: '',
     quantity: '',
     unit: 'kg',
+    rate: '',
     priority: 'medium' as 'low' | 'medium' | 'high',
     reason: '',
   });
@@ -173,7 +190,59 @@ export default function HomeScreen() {
   const { user } = useUser();
   const router = useRouter();
 
-  const dates = Array.from({ length: 7 }, (_, i) => addDays(new Date(), i - 3));
+  // Supervisor: Fetch pending attendance
+  const fetchPendingAttendance = useCallback(() => {
+    const sid = user?.currentSiteId ?? 's1';
+    const list = getAttendancePending(sid);
+    setPendingAttendance(list.map((a) => ({ id: a.id, userId: a.userId, address: a.address, timestamp: a.timestamp, date: a.timestamp })));
+    setCurrentSiteId(sid);
+  }, [user?.currentSiteId]);
+
+  // Load tasks and materials from mock-api
+  const loadData = useCallback(() => {
+    const sid = user?.currentSiteId ?? 's1';
+    setTasks(
+      getTasks(sid).map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status === 'completed' ? 'completed' : 'pending',
+        time: '—',
+        location: t.description || '—',
+        supervisor: t.assignedByName || 'Supervisor',
+        supervisorAvatar: '👨‍💼',
+      }))
+    );
+    setMaterialRequests(
+      getMaterialRequests(sid).map((m) => ({
+        id: m.id,
+        requestedBy: m.requestedBy,
+        requestedByRole: m.requestedByRole,
+        materialName: m.materialName,
+        quantity: m.quantity,
+        unit: m.unit,
+        rate: m.rate,
+        priority: m.priority,
+        status: m.status,
+        reason: m.reason,
+        timestamp: new Date(m.timestamp),
+        approvedBy: m.approvedBy,
+        approvedAt: m.approvedBy ? new Date() : undefined,
+        rejectionReason: m.rejectionReason,
+      }))
+    );
+  }, [user?.currentSiteId]);
+
+  useEffect(() => {
+    loadData();
+    // Auto-refresh when data changes (cross-dashboard communication)
+    const unsubscribe = onDataChange(() => {
+      loadData();
+      if (user?.role === 'site_supervisor' || user?.role === 'supervisor') {
+        fetchPendingAttendance();
+      }
+    });
+    return unsubscribe;
+  }, [loadData, fetchPendingAttendance, user?.role]);
 
   // Debug: Track showCamera state changes
   useEffect(() => {
@@ -305,58 +374,20 @@ export default function HomeScreen() {
       // For Labour: Fetch their assigned sites and check GPS
       if (user?.role === 'labour' && user?.id) {
         try {
-          // Fetch sites assigned to this labour user
-          const sitesResponse = await fetch(`${API_BASE_URL}/api/sites/labour/${user.id}`);
-          const sitesData = await sitesResponse.json();
-
-          if (!sitesData.success || !sitesData.sites || sitesData.sites.length === 0) {
+          const registeredSites = getSitesForLabour(user.id);
+          if (registeredSites.length === 0) {
             Alert.alert(
               'No Site Assigned',
-              'You are not assigned to any site yet. Please contact your supervisor to get enrolled.',
+              'Join a site from Labour Home (e.g. code SITE-A1) to mark attendance.',
               [{ text: 'OK' }]
             );
             return;
           }
-
-          const registeredSites = sitesData.sites;
-          const userLat = location.coords.latitude;
-          const userLon = location.coords.longitude;
-
-          let isWithinSite = false;
-          let nearestSite: any = null;
-          let minDistance = Infinity;
-
-          // Check if user is within any assigned site's radius
-          for (const site of registeredSites) {
-            const distance = calculateDistance(userLat, userLon, site.latitude, site.longitude);
-
-            if (distance <= site.radius) {
-              isWithinSite = true;
-              nearestSite = site;
-              break;
-            }
-
-            // Track nearest site for error message
-            if (distance < minDistance) {
-              minDistance = distance;
-              nearestSite = site;
-            }
-          }
-
-          if (!isWithinSite) {
-            const distanceText = nearestSite ? `You are ${Math.round(minDistance)}m away from "${nearestSite.name}" (radius: ${nearestSite.radius}m).` : '';
-            Alert.alert(
-              'Location Restricted',
-              `You must be within the site radius to mark attendance.\n\n${distanceText}\n\nPlease move closer to the site center.`,
-              [{ text: 'OK' }]
-            );
-            return;
-          }
-
-          // Store the site ID for attendance marking (MongoDB uses string IDs)
-          if (nearestSite) {
-            setCurrentSiteId(nearestSite.id);
-            console.log(`📍 Site detected: ${nearestSite.name} (ID: ${nearestSite.id})`);
+          // Mock: skip geofencing, use first site
+          const firstSite = registeredSites[0];
+          if (firstSite) {
+            setCurrentSiteId(firstSite.id);
+            console.log(`📍 Site detected: ${firstSite.name} (ID: ${firstSite.id})`);
           }
 
           // User is within site boundaries, allow attendance
@@ -480,100 +511,53 @@ export default function HomeScreen() {
       // Convert siteId to string if it's a MongoDB ObjectId, otherwise keep as number
       const siteIdForApi = typeof siteIdToUse === 'string' ? siteIdToUse : String(siteIdToUse);
       
-      console.log(`📤 Marking attendance: userId=${user.id}, siteId=${siteIdForApi}`);
+      const uid = user.id;
+      const lat = currentLocation?.coords.latitude ?? 19.076;
+      const lon = currentLocation?.coords.longitude ?? 72.8777;
+      const addr = locationAddress || 'Andheri West, Mumbai';
+      const photo = capturedPhoto || 'mock://photo';
 
-      const response = await fetch(`${API_BASE_URL}/api/attendance/mark`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user.id, // Keep as string if MongoDB ID
-          siteId: siteIdForApi, // MongoDB uses string IDs
-          photoUri: capturedPhoto,
-          gpsLat: currentLocation.coords.latitude,
-          gpsLon: currentLocation.coords.longitude,
-          timestamp: new Date().toISOString(),
-        }),
-      });
+      markAttendance(uid, photo, lat, lon, addr, siteIdForApi);
 
-      const data = await response.json();
+      const record: AttendanceRecord = {
+        id: `a-${Date.now()}`,
+        userId: uid,
+        timestamp: new Date(),
+        photoUri: photo,
+        proofPhotos: proofPhotos,
+        latitude: lat,
+        longitude: lon,
+        address: addr,
+        status: 'present',
+      };
 
-      if (response.ok && data.success) {
-        const record: AttendanceRecord = {
-          id: data.attendance.id.toString(),
-          userId: user.id,
-          timestamp: new Date(),
-          photoUri: capturedPhoto,
-          proofPhotos: proofPhotos,
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          address: locationAddress,
-          status: 'present',
-        };
-
-        setAttendanceRecords([...attendanceRecords, record]);
-        Alert.alert(
-          'Attendance Marked!',
-          `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nLocation: ${locationAddress}\n\nWaiting for supervisor approval.`,
-          [{
-            text: 'OK', onPress: () => {
-              setShowAttendanceModal(false);
-              setCapturedPhoto(null);
-              setProofPhotos([]);
-            }
-          }]
-        );
-      } else {
-        Alert.alert('Error', data.error || data.message || 'Failed to mark attendance');
-      }
+      setAttendanceRecords([...attendanceRecords, record]);
+      Alert.alert(
+        'Attendance Marked!',
+        `You are marked present at ${format(new Date(), 'hh:mm a')}.\n\nLocation: ${addr}\n\nWaiting for supervisor approval.`,
+        [{
+          text: 'OK', onPress: () => {
+            setShowAttendanceModal(false);
+            setCapturedPhoto(null);
+            setProofPhotos([]);
+          }
+        }]
+      );
     } catch (error) {
       console.error('Mark attendance error:', error);
       Alert.alert('Error', 'Failed to mark attendance. Please try again.');
     }
   };
 
-  // Supervisor: Fetch pending attendance
-  const fetchPendingAttendance = async () => {
-    if (!user?.id || !user?.currentSiteId) return;
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/attendance/pending?siteId=${user.currentSiteId}&supervisorId=${user.id}`);
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setPendingAttendance(data.pending || []);
-        setCurrentSiteId(Number(user.currentSiteId));
-      }
-    } catch (error) {
-      console.error('Fetch pending attendance error:', error);
-    }
-  };
 
   // Supervisor: Approve or reject attendance
-  const handleApproveAttendance = async (attendanceId: number, approved: boolean) => {
-    if (!user?.id) return;
-
+  const handleApproveAttendance = (attendanceId: string | number, approved: boolean) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/attendance/${attendanceId}/approve`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          approved: approved,
-          supervisorId: Number(user.id),
-          reason: approved ? undefined : 'Rejected by supervisor',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        Alert.alert('Success', data.message || (approved ? 'Attendance approved' : 'Attendance rejected'));
-        fetchPendingAttendance(); // Refresh list
-      } else {
-        Alert.alert('Error', data.error || 'Failed to update attendance');
-      }
-    } catch (error) {
-      console.error('Approve attendance error:', error);
-      Alert.alert('Error', 'Failed to update attendance. Please try again.');
+      approveAttendance(String(attendanceId), approved);
+      Alert.alert('Success', approved ? 'Attendance approved' : 'Attendance rejected');
+      fetchPendingAttendance();
+    } catch {
+      Alert.alert('Error', 'Failed to update attendance.');
     }
   };
 
@@ -603,21 +587,39 @@ export default function HomeScreen() {
       return;
     }
 
-    const request: MaterialRequest = {
-      id: Date.now().toString(),
-      requestedBy: user?.name || 'Unknown',
-      requestedByRole: user?.role || 'engineer',
-      materialName: newMaterialRequest.materialName,
-      quantity: parseFloat(newMaterialRequest.quantity),
-      unit: newMaterialRequest.unit,
-      priority: newMaterialRequest.priority,
-      status: 'pending',
-      reason: newMaterialRequest.reason,
-      timestamp: new Date(),
-    };
+    const sid = user?.currentSiteId ?? 's1';
+    requestMaterial(
+      user?.name || 'Unknown',
+      user?.role || 'engineer',
+      newMaterialRequest.materialName,
+      parseFloat(newMaterialRequest.quantity),
+      newMaterialRequest.unit,
+      newMaterialRequest.priority,
+      newMaterialRequest.reason,
+      newMaterialRequest.rate ? parseFloat(newMaterialRequest.rate) : undefined
+    );
 
-    setMaterialRequests([...materialRequests, request]);
-    Alert.alert('Success', 'Material request submitted for approval');
+    // Reload from mock
+    setMaterialRequests(
+      getMaterialRequests(sid).map((m) => ({
+        id: m.id,
+        requestedBy: m.requestedBy,
+        requestedByRole: m.requestedByRole,
+        materialName: m.materialName,
+        quantity: m.quantity,
+        unit: m.unit,
+        rate: m.rate,
+        priority: m.priority,
+        status: m.status,
+        reason: m.reason,
+        timestamp: new Date(m.timestamp),
+        approvedBy: m.approvedBy,
+        approvedAt: m.approvedBy ? new Date() : undefined,
+        rejectionReason: m.rejectionReason,
+      }))
+    );
+
+    Alert.alert('Success', 'Material request submitted');
     setShowMaterialModal(false);
     setNewMaterialRequest({
       materialName: '',
@@ -629,21 +631,51 @@ export default function HomeScreen() {
   };
 
   const handleApproveMaterial = (requestId: string) => {
-    setMaterialRequests(materialRequests.map(req =>
-      req.id === requestId
-        ? { ...req, status: 'approved', approvedBy: user?.name, approvedAt: new Date() }
-        : req
-    ));
-    Alert.alert('Approved', 'Material request has been approved');
+    approveMaterialRequest(requestId, true, user?.name);
+    const sid = user?.currentSiteId ?? 's1';
+    setMaterialRequests(
+      getMaterialRequests(sid).map((m) => ({
+        id: m.id,
+        requestedBy: m.requestedBy,
+        requestedByRole: m.requestedByRole,
+        materialName: m.materialName,
+        quantity: m.quantity,
+        unit: m.unit,
+        rate: m.rate,
+        priority: m.priority,
+        status: m.status,
+        reason: m.reason,
+        timestamp: new Date(m.timestamp),
+        approvedBy: m.approvedBy,
+        approvedAt: m.approvedBy ? new Date() : undefined,
+        rejectionReason: m.rejectionReason,
+      }))
+    );
+    Alert.alert('Approved', 'Material request approved');
   };
 
   const handleRejectMaterial = (requestId: string, reason: string) => {
-    setMaterialRequests(materialRequests.map(req =>
-      req.id === requestId
-        ? { ...req, status: 'rejected', rejectionReason: reason }
-        : req
-    ));
-    Alert.alert('Rejected', 'Material request has been rejected');
+    approveMaterialRequest(requestId, false, undefined, reason);
+    const sid = user?.currentSiteId ?? 's1';
+    setMaterialRequests(
+      getMaterialRequests(sid).map((m) => ({
+        id: m.id,
+        requestedBy: m.requestedBy,
+        requestedByRole: m.requestedByRole,
+        materialName: m.materialName,
+        quantity: m.quantity,
+        unit: m.unit,
+        rate: m.rate,
+        priority: m.priority,
+        status: m.status,
+        reason: m.reason,
+        timestamp: new Date(m.timestamp),
+        approvedBy: m.approvedBy,
+        approvedAt: m.approvedBy ? new Date() : undefined,
+        rejectionReason: m.rejectionReason,
+      }))
+    );
+    Alert.alert('Rejected', 'Material request rejected');
   };
 
   const getRoleFeatures = () => {
@@ -658,6 +690,7 @@ export default function HomeScreen() {
           { id: 'chat', icon: 'chatbubbles', title: 'Chat with Supervisor', subtitle: 'Report & communicate', color: '#3B82F6' },
         ];
       case 'site_supervisor':
+      case 'supervisor':
         return [
           { id: 'verify', icon: 'checkmark-circle', title: 'Verify Attendance', subtitle: `${pendingAttendance.length} pending`, color: '#8B5CF6' },
           { id: 'assign', icon: 'people', title: 'Assign Tasks', subtitle: 'Delegate to labour', color: '#10B981' },
@@ -665,14 +698,35 @@ export default function HomeScreen() {
           { id: 'access', icon: 'shield-checkmark', title: 'Access Control', subtitle: 'Manage permissions', color: '#EF4444' },
           { id: 'chat', icon: 'chatbubbles', title: 'Team Chat', subtitle: 'Labour & Engineer', color: '#F59E0B' },
         ];
-      case 'engineer':
+      case 'junior_engineer':
         return [
-          { id: 'onsite', icon: 'construct', title: 'On-site Verification', subtitle: 'Quality inspection', color: '#8B5CF6' },
-          { id: 'materials', icon: 'cube', title: 'Material Request', subtitle: 'Order materials', color: '#10B981' },
-          { id: 'stock', icon: 'layers', title: 'Stock Tracking', subtitle: 'Inventory management', color: '#06B6D4' },
-          { id: 'approvals', icon: 'document-attach', title: 'Approvals', subtitle: 'Review documents', color: '#3B82F6' },
-          { id: 'assign-task', icon: 'git-branch', title: 'Assign to Supervisor', subtitle: 'Task delegation', color: '#F59E0B' },
-          { id: 'chat', icon: 'chatbubbles', title: 'Communications', subtitle: 'Supervisor & Owner', color: '#EC4899' },
+          { id: 'materials', icon: 'cube', title: 'Material Request', subtitle: 'Request materials', color: '#10B981' },
+          { id: 'work-logs', icon: 'document-text', title: 'Work Logs', subtitle: 'Daily work reports', color: '#8B5CF6' },
+          { id: 'site-docs', icon: 'camera', title: 'Site Documentation', subtitle: 'Upload photos', color: '#F59E0B' },
+          { id: 'stock', icon: 'layers', title: 'Stock Tracking', subtitle: 'View inventory', color: '#06B6D4' },
+          { id: 'tasks', icon: 'clipboard', title: 'My Tasks', subtitle: 'View assigned tasks', color: '#3B82F6' },
+          { id: 'chat', icon: 'chatbubbles', title: 'Communications', subtitle: 'Report to seniors', color: '#EC4899' },
+        ];
+      case 'senior_engineer':
+        return [
+          { id: 'material-approvals', icon: 'checkmark-done', title: 'Material Approvals', subtitle: 'Approve requests (up to ₹50k)', color: '#10B981' },
+          { id: 'materials', icon: 'cube', title: 'Material Request', subtitle: 'Request materials', color: '#8B5CF6' },
+          { id: 'assign-task', icon: 'people', title: 'Assign Tasks', subtitle: 'Delegate to team', color: '#F59E0B' },
+          { id: 'quality', icon: 'checkmark-circle', title: 'Quality Control', subtitle: 'Inspections & reports', color: '#3B82F6' },
+          { id: 'progress', icon: 'stats-chart', title: 'Progress Reports', subtitle: 'Track project status', color: '#06B6D4' },
+          { id: 'work-logs', icon: 'document-text', title: 'Work Logs', subtitle: 'Review & approve', color: '#8B5CF6' },
+          { id: 'stock', icon: 'layers', title: 'Stock Management', subtitle: 'Full inventory control', color: '#6366F1' },
+          { id: 'chat', icon: 'chatbubbles', title: 'Team Communications', subtitle: 'Supervisor & Owner', color: '#EC4899' },
+        ];
+      case 'engineer':
+        // Fallback for legacy 'engineer' role - treat as junior
+        return [
+          { id: 'materials', icon: 'cube', title: 'Material Request', subtitle: 'Request materials', color: '#10B981' },
+          { id: 'work-logs', icon: 'document-text', title: 'Work Logs', subtitle: 'Daily work reports', color: '#8B5CF6' },
+          { id: 'site-docs', icon: 'camera', title: 'Site Documentation', subtitle: 'Upload photos', color: '#F59E0B' },
+          { id: 'stock', icon: 'layers', title: 'Stock Tracking', subtitle: 'View inventory', color: '#06B6D4' },
+          { id: 'tasks', icon: 'clipboard', title: 'My Tasks', subtitle: 'View assigned tasks', color: '#3B82F6' },
+          { id: 'chat', icon: 'chatbubbles', title: 'Communications', subtitle: 'Report to seniors', color: '#EC4899' },
         ];
       case 'owner':
         return [
@@ -702,114 +756,96 @@ export default function HomeScreen() {
     } else if (featureId === 'payments') {
       setShowGSTModal(true);
     } else if (featureId === 'tasks') {
-      // Show tasks list
-      Alert.alert('Tasks', 'View your assigned tasks here');
+      router.push('/(features)/work-logs');
     } else if (featureId === 'site-docs') {
-      // Upload site documentation
-      Alert.alert('Site Documentation', 'Upload work photos and documents');
+      router.push('/(features)/work-logs');
+    } else if (featureId === 'work-logs') {
+      router.push('/(features)/work-logs');
     } else if (featureId === 'verify') {
       setShowPendingAttendanceModal(true);
       fetchPendingAttendance();
-    } else if (featureId === 'assign' || featureId === 'approve' || featureId === 'access') {
-      Alert.alert('Coming Soon', `${featureId} feature will be available soon`);
-    } else if (featureId === 'onsite' || featureId === 'approvals' || featureId === 'assign-task') {
+    } else if (featureId === 'assign-task') {
+      // Senior engineer: Assign tasks to junior engineers and labour
+      if (user?.role === 'senior_engineer') {
+        router.push('/(features)/work-logs');
+      } else {
+        Alert.alert('Coming Soon', 'Task assignment feature will be available soon');
+      }
+    } else if (featureId === 'quality') {
+      // Senior engineer: Quality control and inspections
+      router.push('/(features)/work-logs');
+    } else if (featureId === 'progress') {
+      // Senior engineer: Progress reporting
+      router.push('/(features)/owner-dashboard');
+    } else if (featureId === 'assign') {
+      if (user?.role === 'site_supervisor' || user?.role === 'supervisor') {
+        router.push('/(supervisor)/(tabs)/tasks');
+      } else {
+        Alert.alert('Coming Soon', 'Task assignment feature will be available soon');
+      }
+    } else if (featureId === 'approve') {
+      if (user?.role === 'site_supervisor' || user?.role === 'supervisor') {
+        router.push('/(supervisor)/approve-work');
+      } else {
+        Alert.alert('Coming Soon', 'Work approval feature will be available soon');
+      }
+    } else if (featureId === 'access') {
+      if (user?.role === 'site_supervisor' || user?.role === 'supervisor') {
+        router.push('/(supervisor)/access-control');
+      } else {
+        Alert.alert('Coming Soon', 'Access control feature will be available soon');
+      }
+    } else if (featureId === 'onsite' || featureId === 'approvals') {
       Alert.alert('Coming Soon', `${featureId} feature will be available soon`);
     } else if (featureId === 'site-owner' || featureId === 'dealer' || featureId === 'chatbot') {
       Alert.alert('Coming Soon', `${featureId} feature will be available soon`);
     }
   };
 
+  const quickActions: QuickAction[] = getRoleFeatures().map((f) => ({
+    ...f,
+    onPress: () => handleFeaturePress(f.id),
+  }));
+
+  const viewRecordsEl =
+    user && ['supervisor', 'engineer', 'owner'].includes(user.role) && attendanceRecords.length > 0 ? (
+      <TouchableOpacity style={styles.viewRecordsButton}>
+        <Ionicons name="list" size={16} color="#8B5CF6" />
+        <Text style={styles.viewRecordsText}>
+          {attendanceRecords.filter((r) => format(r.timestamp, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length} Present
+        </Text>
+      </TouchableOpacity>
+    ) : null;
+
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarEmoji}>👷</Text>
-            </View>
-            <View>
-              <Text style={styles.greetingText}>{getGreeting()}</Text>
-              <Text style={styles.nameText}>{getRoleName()}</Text>
-              {user && (
-                <Text style={styles.roleText}>{user.role.toUpperCase()}</Text>
-              )}
-            </View>
-          </View>
-          <TouchableOpacity style={styles.searchButton}>
-            <Ionicons name="search" size={20} color="#111" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Role-specific Features Grid */}
-        <View style={styles.featuresContainer}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-            {user && ['supervisor', 'engineer', 'owner'].includes(user.role) && attendanceRecords.length > 0 && (
-              <TouchableOpacity style={styles.viewRecordsButton}>
-                <Ionicons name="list" size={16} color="#8B5CF6" />
-                <Text style={styles.viewRecordsText}>
-                  {attendanceRecords.filter(r => format(r.timestamp, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length} Present
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <View style={styles.featuresGrid}>
-            {getRoleFeatures().map((feature) => (
-              <TouchableOpacity
-                key={feature.id}
-                style={styles.featureCard}
-                onPress={() => handleFeaturePress(feature.id)}
-              >
-                <View style={[styles.featureIcon, { backgroundColor: feature.color + '20' }]}>
-                  <Ionicons name={feature.icon as any} size={24} color={feature.color} />
-                </View>
-                <Text style={styles.featureTitle} numberOfLines={2}>{feature.title}</Text>
-                <Text style={styles.featureSubtitle} numberOfLines={1}>{feature.subtitle}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Date Strip */}
-        <View style={styles.dateStripContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {dates.map((date, index) => {
-              const isSelected =
-                format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
-              return (
-                <TouchableOpacity
-                  key={index}
-                  onPress={() => setSelectedDate(date)}
-                  style={[
-                    styles.dateCard,
-                    isSelected && styles.dateCardActive,
-                  ]}
-                >
-                  <Text style={[styles.dateDay, isSelected && styles.dateDayActive]}>
-                    {format(date, 'EEE').substring(0, 3)}
-                  </Text>
-                  <Text style={[styles.dateNumber, isSelected && styles.dateNumberActive]}>
-                    {format(date, 'd')}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* Your Tasks Section */}
-        <View style={styles.tasksContainer}>
-          <Text style={styles.tasksTitle}>{t('home.yourTasks')}</Text>
-
+        <DashboardHeader
+          name={user?.name || getRoleName()}
+          role={user?.role || ''}
+          profilePhoto={user?.profilePhoto}
+        />
+        <DashboardQuickActions
+          title="Quick Actions"
+          actions={quickActions}
+          rightElement={viewRecordsEl}
+        />
+        <DashboardDateStrip
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          numDays={7}
+          offset={3}
+        />
+        <DashboardYourTasks
+          title={t('home.yourTasks')}
+          pendingLabel="Pending"
+          showPendingTag={true}
+        >
           <View style={styles.tasksGrid}>
-            {/* Large Card */}
             <View style={styles.taskLargeColumn}>
               <TaskCard task={tasks[0]} isLarge />
             </View>
-
-            {/* Two Stacked Cards */}
             <View style={styles.taskSmallColumn}>
               <View style={styles.taskSmallTop}>
                 <TaskCard task={tasks[1]} />
@@ -819,7 +855,7 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </DashboardYourTasks>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
@@ -980,7 +1016,8 @@ export default function HomeScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {user?.role === 'engineer' ? 'Material Request' : 'Material Approvals'}
+                {user?.role === 'junior_engineer' || user?.role === 'engineer' ? 'Material Request' : 
+                 user?.role === 'senior_engineer' ? 'Material Management' : 'Material Approvals'}
               </Text>
               <TouchableOpacity onPress={() => setShowMaterialModal(false)}>
                 <Ionicons name="close" size={24} color="#111" />
@@ -989,7 +1026,7 @@ export default function HomeScreen() {
 
             <ScrollView style={styles.modalBody}>
               {/* Engineer: Create New Request */}
-              {user?.role === 'engineer' && (
+              {(user?.role === 'engineer' || user?.role === 'junior_engineer' || user?.role === 'senior_engineer') && (
                 <View style={styles.materialForm}>
                   <Text style={styles.materialSectionTitle}>Create New Request</Text>
 
@@ -1036,6 +1073,20 @@ export default function HomeScreen() {
                           <Ionicons name="chevron-down" size={16} color="#6B7280" />
                         </TouchableOpacity>
                       </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Rate per Unit (₹) - Optional</Text>
+                    <View style={styles.inputWrapper}>
+                      <Ionicons name="cash-outline" size={20} color="#6B7280" />
+                      <TextInput
+                        style={styles.textInput}
+                        placeholder="e.g., 380 (for cement bags)"
+                        keyboardType="numeric"
+                        value={newMaterialRequest.rate}
+                        onChangeText={(text) => setNewMaterialRequest({ ...newMaterialRequest, rate: text })}
+                      />
                     </View>
                   </View>
 
@@ -1092,7 +1143,8 @@ export default function HomeScreen() {
               {/* Display Material Requests */}
               <View style={styles.requestsList}>
                 <Text style={styles.materialSectionTitle}>
-                  {user?.role === 'engineer' ? 'My Requests' : 'Pending Approvals'}
+                  {user?.role === 'junior_engineer' || user?.role === 'engineer' ? 'My Requests' : 
+                   user?.role === 'senior_engineer' ? 'All Requests & Approvals' : 'Pending Approvals'}
                 </Text>
 
                 {materialRequests.length === 0 ? (
@@ -1102,7 +1154,14 @@ export default function HomeScreen() {
                   </View>
                 ) : (
                   materialRequests
-                    .filter(req => user?.role === 'engineer' || req.status === 'pending')
+                    .filter(req => {
+                      if (user?.role === 'junior_engineer' || user?.role === 'engineer') {
+                        return req.requestedBy === user?.name;
+                      } else if (user?.role === 'senior_engineer') {
+                        return req.status === 'pending' || req.requestedBy === user?.name;
+                      }
+                      return req.status === 'pending';
+                    })
                     .map((request) => (
                       <View key={request.id} style={styles.requestCard}>
                         <View style={styles.requestHeader}>
@@ -1112,6 +1171,7 @@ export default function HomeScreen() {
                               <Text style={styles.requestMaterial}>{request.materialName}</Text>
                               <Text style={styles.requestQuantity}>
                                 {request.quantity} {request.unit}
+                                {request.rate && ` • ₹${(request.quantity * request.rate).toLocaleString()}`}
                               </Text>
                             </View>
                           </View>
@@ -1158,7 +1218,45 @@ export default function HomeScreen() {
                           </View>
                         )}
 
-                        {/* Approval Buttons for Owner/Manager */}
+                        {/* Approval Buttons for Senior Engineer (up to ₹50k) and Owner/Manager */}
+                        {user?.role === 'senior_engineer' && request.status === 'pending' && request.requestedBy !== user?.name && (
+                          <>
+                            {request.rate && (
+                              <View style={styles.approvalLimitInfo}>
+                                <Text style={styles.approvalLimitText}>
+                                  Total Value: ₹{(request.quantity * request.rate).toLocaleString()}
+                                  {(request.quantity * request.rate) > 50000 && (
+                                    <Text style={{ color: '#EF4444', fontWeight: '700' }}> (Exceeds ₹50k limit - Owner approval required)</Text>
+                                  )}
+                                </Text>
+                              </View>
+                            )}
+                            {(request.quantity * (request.rate || 0)) <= 50000 && (
+                              <View style={styles.approvalActions}>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.rejectButton]}
+                                  onPress={() => {
+                                    Alert.prompt(
+                                      'Reject Request',
+                                      'Please provide a reason for rejection:',
+                                      (reason) => handleRejectMaterial(request.id, reason || 'No reason provided')
+                                    );
+                                  }}
+                                >
+                                  <Ionicons name="close-circle" size={18} color="#EF4444" />
+                                  <Text style={styles.rejectButtonText}>Reject</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.actionButton, styles.approveButton]}
+                                  onPress={() => handleApproveMaterial(request.id)}
+                                >
+                                  <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                                  <Text style={styles.approveButtonText}>Approve</Text>
+                                </TouchableOpacity>
+                              </View>
+                            )}
+                          </>
+                        )}
                         {user?.role === 'owner' && request.status === 'pending' && (
                           <View style={styles.approvalActions}>
                             <TouchableOpacity
@@ -2469,6 +2567,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
     lineHeight: 18,
+  },
+  approvalLimitInfo: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: '#F0F9FF',
+    borderRadius: 6,
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  approvalLimitText: {
+    fontSize: 12,
+    color: '#1E40AF',
+    fontWeight: '600',
   },
   approvalActions: {
     flexDirection: 'row',

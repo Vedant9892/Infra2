@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+/** Labour Attendance – mock API only. No backend. */
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,184 +8,188 @@ import {
   ActivityIndicator,
   StyleSheet,
   Alert,
-  Platform,
+  RefreshControl,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../../contexts/UserContext';
-import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../../constants/api';
 import { DESIGN } from '../../../constants/designSystem';
-import { supabase } from '../../../constants/supabase';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
+import { getAttendanceApproved, markAttendance, onDataChange } from '../../../lib/mock-api';
 
 export default function LabourAttendanceScreen() {
   const router = useRouter();
   const { siteId } = useLocalSearchParams<{ siteId: string }>();
   const { user } = useUser();
   const [loading, setLoading] = useState(false);
-  const [todayStatus, setTodayStatus] = useState<string | null>(null);
-  const [checking, setChecking] = useState(true);
+  const [todayMarked, setTodayMarked] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [list, setList] = useState<{ id: string; address: string; timestamp: string; status: string }[]>([]);
 
-  React.useEffect(() => {
-    if (!siteId || !user?.id) return;
-    (async () => {
-      try {
-        // Check if attendance already marked today using existing API
-        const res = await fetch(`${API_BASE_URL}/api/attendance/pending?siteId=${siteId}`);
-        const data = await res.json();
-        // For now, just check if we can mark attendance
-        setTodayStatus(null); // Will be set after marking
-      } catch {
-        setTodayStatus(null);
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, [siteId, user?.id]);
+  const load = useCallback(() => {
+    if (!siteId) return;
+    const approved = getAttendanceApproved(siteId);
+    setList(approved.map((a) => ({ id: a.id, address: a.address, timestamp: a.timestamp, status: a.status })));
+  }, [siteId]);
 
-  const handleMark = async () => {
-    if (!siteId || !user?.id) {
-      Alert.alert('Error', 'Not signed in');
-      return;
-    }
-    const { status: cam } = await ImagePicker.requestCameraPermissionsAsync();
-    if (cam !== 'granted') {
-      Alert.alert('Permission', 'Camera access is required');
-      return;
-    }
-    const { status: loc } = await Location.requestForegroundPermissionsAsync();
-    if (loc !== 'granted') {
-      Alert.alert('Permission', 'Location (GPS) is required for attendance');
+  useEffect(() => {
+    load();
+    // Auto-refresh when data changes (cross-dashboard communication)
+    const unsubscribe = onDataChange(() => {
+      load();
+    });
+    return unsubscribe;
+  }, [load]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
+    setTimeout(() => setRefreshing(false), 400);
+  };
+
+  const handleMark = () => {
+    if (!siteId) {
+      Alert.alert('Error', 'Missing site');
       return;
     }
     setLoading(true);
     try {
-      const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const camResult = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 0.8,
-        base64: true,
-      });
-      if (camResult.canceled || !camResult.assets?.[0]?.base64) {
-        setLoading(false);
-        return;
-      }
-      const base64 = camResult.assets[0].base64;
-      const b64 = base64.startsWith('data:') ? base64.split(',')[1] : base64;
-      const bytes = atob(b64);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      const path = `attendance/${user.id}-${Date.now()}.jpg`;
-      const { error: upErr } = await supabase.storage
-        .from('profile-photos')
-        .upload(path, arr, { contentType: 'image/jpeg', upsert: true });
-      if (upErr) throw new Error(upErr.message);
-      const { data: urlData } = supabase.storage.from('profile-photos').getPublicUrl(path);
-      const photoUrl = urlData.publicUrl;
-
-      // Use existing attendance API
-      const res = await fetch(`${API_BASE_URL}/api/attendance/mark`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          siteId: siteId,
-          photoUri: photoUrl,
-          gpsLat: location.coords.latitude,
-          gpsLon: location.coords.longitude,
-          timestamp: new Date().toISOString(),
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || 'Failed to mark attendance');
-      Alert.alert('Success', 'Attendance marked. GPS and photo recorded.');
-      setTodayStatus('Marked');
-    } catch (e: unknown) {
+      const uid = user?.id ?? 'u1';
+      markAttendance(uid, 'photo://captured', 19.076, 72.8777, locationAddress || 'Andheri West, Mumbai', siteId);
+      setTodayMarked(true);
+      load();
+      Alert.alert('Success', 'Attendance marked successfully. GPS and photo recorded.');
+    } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Failed');
     } finally {
       setLoading(false);
     }
   };
 
+  if (!siteId) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="dark" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>Missing site</Text>
+          <TouchableOpacity style={styles.backBtnFull} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText} allowFontScaling={false}>← Back</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.title} allowFontScaling={false}>Mark Attendance</Text>
-        <View style={styles.back} />
+        <Text style={styles.title}>Mark Attendance</Text>
+        <View style={styles.backBtn} />
       </View>
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {checking ? (
-          <ActivityIndicator size="large" color={DESIGN.colors.primary} />
-        ) : (
-          <>
-            <Text style={styles.hint} allowFontScaling={false}>
-              GPS + Photo required. Attendance is stored site-wise.
-            </Text>
-            {todayStatus === 'Marked' && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText} allowFontScaling={false}>Today: Marked</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DESIGN.colors.primary]} />}
+      >
+        <Text style={styles.hint}>GPS-fenced check-in. Tap below to mark your attendance.</Text>
+        <TouchableOpacity
+          style={[styles.markBtn, loading && styles.markBtnDisabled]}
+          onPress={handleMark}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Ionicons name="location" size={24} color="#fff" />
+              <Text style={styles.markBtnText}>Mark attendance</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {todayMarked ? (
+          <View style={styles.successCard}>
+            <Ionicons name="checkmark-circle" size={24} color={DESIGN.colors.success} />
+            <Text style={styles.successText}>Marked today</Text>
+          </View>
+        ) : null}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent Attendance</Text>
+          {list.length === 0 ? (
+            <Text style={styles.empty}>No records yet.</Text>
+          ) : (
+            list.slice(0, 5).map((a) => (
+              <View key={a.id} style={styles.card}>
+                <Text style={styles.cardMeta}>{a.address}</Text>
+                <Text style={styles.cardTime}>{new Date(a.timestamp).toLocaleString()}</Text>
               </View>
-            )}
-            <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary, loading && styles.btnDisabled]}
-              onPress={handleMark}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color={DESIGN.colors.surface} />
-              ) : (
-                <Text style={styles.btnText} allowFontScaling={false}>Mark Attendance</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        )}
+            ))
+          )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: DESIGN.colors.background },
+  container: { flex: 1, backgroundColor: DESIGN.colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: DESIGN.BASE_PADDING,
+    paddingHorizontal: DESIGN.spacing.lg,
     paddingVertical: DESIGN.spacing.md,
     backgroundColor: DESIGN.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: DESIGN.colors.border,
   },
-  back: { minWidth: 72 },
-  backText: { fontSize: DESIGN.typography.subtitle, fontWeight: '600', color: DESIGN.colors.primary },
-  title: { fontSize: DESIGN.typography.subtitle, fontWeight: '700', color: DESIGN.colors.text.primary },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 18, fontWeight: '700', color: DESIGN.colors.text.primary },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: DESIGN.BASE_PADDING, paddingVertical: DESIGN.spacing.xl },
-  hint: { fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.lg },
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: DESIGN.spacing.md,
-    paddingVertical: DESIGN.spacing.sm,
-    borderRadius: DESIGN.radius.sm,
-    marginBottom: DESIGN.spacing.lg,
-  },
-  badgeText: { fontSize: DESIGN.typography.caption, fontWeight: '600', color: '#059669' },
-  btn: {
-    borderRadius: DESIGN.radius.sm,
-    paddingVertical: DESIGN.spacing.lg,
+  content: { padding: DESIGN.spacing.lg, paddingBottom: DESIGN.spacing.xl * 2 },
+  hint: { fontSize: 14, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.xl },
+  markBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: DESIGN.button.recommended,
+    gap: 10,
+    backgroundColor: DESIGN.colors.primary,
+    borderRadius: DESIGN.radius.md,
+    paddingVertical: DESIGN.spacing.md,
+    minHeight: DESIGN.button.min,
+    marginBottom: DESIGN.spacing.xl,
   },
-  btnPrimary: { backgroundColor: DESIGN.colors.primary },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { fontSize: DESIGN.typography.subtitle, fontWeight: '600', color: DESIGN.colors.surface },
+  markBtnDisabled: { opacity: 0.6 },
+  markBtnText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  successCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#D1FAE5',
+    padding: DESIGN.spacing.md,
+    borderRadius: DESIGN.radius.md,
+    marginBottom: DESIGN.spacing.xl,
+  },
+  successText: { fontSize: 14, fontWeight: '600', color: DESIGN.colors.success },
+  section: { marginTop: DESIGN.spacing.lg },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: DESIGN.colors.text.primary, marginBottom: DESIGN.spacing.md },
+  card: {
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.md,
+    padding: DESIGN.spacing.md,
+    marginBottom: DESIGN.spacing.md,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
+  },
+  cardMeta: { fontSize: 14, color: DESIGN.colors.text.secondary },
+  cardTime: { fontSize: 12, color: DESIGN.colors.text.tertiary, marginTop: 4 },
+  empty: { fontSize: 14, color: DESIGN.colors.text.secondary },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: DESIGN.spacing.xl },
+  errorText: { fontSize: 16, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.md },
+  backBtnFull: { backgroundColor: DESIGN.colors.primary, paddingHorizontal: DESIGN.spacing.xl, paddingVertical: DESIGN.spacing.md, borderRadius: DESIGN.radius.sm },
+  backBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
 });

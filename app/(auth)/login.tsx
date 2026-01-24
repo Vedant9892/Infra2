@@ -14,19 +14,20 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useUser } from '../../contexts/UserContext';
 import { API_BASE_URL } from '../../constants/api';
 import { DESIGN } from '../../constants/designSystem';
+import { OTPInput } from '../../components/OTPInput';
 
 type Role = 'labour' | 'site_supervisor' | 'junior_engineer' | 'senior_engineer' | 'site_manager' | 'site_owner';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { language, setLanguage, t } = useLanguage();
-  const { setUser } = useUser();
+  const { setUser, setToken } = useUser();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | null>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showOtpScreen, setShowOtpScreen] = useState(false);
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const [otp, setOtp] = useState('');
   const [generatedOtp, setGeneratedOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -42,9 +43,9 @@ export default function LoginScreen() {
     }
   };
 
-  const handleVerifyOtp = async () => {
-    const enteredOtp = otp.join('');
-    if (enteredOtp === generatedOtp) {
+  const handleVerifyOtp = async (otpToVerify?: string) => {
+    const otpValue = otpToVerify || otp;
+    if (otpValue === generatedOtp) {
       // After successful OTP verification
       try {
         setShowOtpScreen(false);
@@ -133,15 +134,16 @@ export default function LoginScreen() {
       }
     } else {
       alert('Invalid OTP. Please try again.');
-      setOtp(['', '', '', '', '', '']);
+      setOtp('');
     }
   };
 
-  const handleOtpChange = (value: string, index: number) => {
-    if (value.length <= 1 && /^\d*$/.test(value)) {
-      const newOtp = [...otp];
-      newOtp[index] = value;
-      setOtp(newOtp);
+  const handleOtpComplete = (enteredOtp: string) => {
+    setOtp(enteredOtp);
+    // Auto-verify when OTP is complete (6 digits)
+    // Pass the enteredOtp directly to avoid state timing issues
+    if (enteredOtp.length === 6) {
+      handleVerifyOtp(enteredOtp);
     }
   };
 
@@ -222,25 +224,17 @@ export default function LoginScreen() {
             </Text>
           </View>
 
-          <View style={styles.otpContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                style={styles.otpInput}
-                autoFocus={index === 0}
-                allowFontScaling={false}
-              />
-            ))}
-          </View>
+          <OTPInput
+            length={6}
+            value={otp}
+            onChange={setOtp}
+            onComplete={handleOtpComplete}
+          />
 
           <TouchableOpacity
-            style={[styles.button, otp.every(d => d !== '') && styles.buttonActive]}
-            onPress={handleVerifyOtp}
-            disabled={!otp.every(d => d !== '')}
+            style={[styles.button, otp.length === 6 && styles.buttonActive]}
+            onPress={() => handleVerifyOtp(otp)}
+            disabled={otp.length !== 6}
           >
             <Text style={styles.buttonText} allowFontScaling={false}>
               Verify & Continue

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+/** Labour Tasks – mock API only. No backend. */
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,144 +9,127 @@ import {
   RefreshControl,
   StyleSheet,
   Alert,
-  Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../../contexts/UserContext';
-import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../../constants/api';
 import { DESIGN } from '../../../constants/designSystem';
-import { LabourCard } from '../../../components/LabourCard';
-
-interface Task {
-  _id: string;
-  id?: string;
-  title: string;
-  description?: string;
-  status: string;
-  priority?: string;
-  dueDate?: string;
-}
+import { getTasks, updateTaskStatus, onDataChange } from '../../../lib/mock-api';
 
 export default function LabourTasksScreen() {
   const router = useRouter();
   const { siteId } = useLocalSearchParams<{ siteId: string }>();
   const { user } = useUser();
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<{ id: string; title: string; description?: string; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [, forceUpdate] = useState(0);
 
-  const fetchTasks = useCallback(async () => {
-    if (!siteId || !user?.id) return;
-    try {
-      // Use existing task API
-      const res = await fetch(`${API_BASE_URL}/api/tasks?userId=${user.id}&role=labour&siteId=${siteId}`);
-      const data = await res.json();
-      if (res.ok && data.success && Array.isArray(data.tasks)) {
-        setTasks(data.tasks.map((t: any) => ({
-          _id: t.id?.toString() || t._id?.toString() || '',
-          id: t.id?.toString(),
-          title: t.title,
-          description: t.description,
-          status: t.status,
-          priority: t.priority,
-          dueDate: t.date,
-        })));
-      } else {
-        setTasks([]);
-      }
-    } catch {
-      setTasks([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [siteId, user?.id]);
+  const fetchTasks = useCallback(() => {
+    if (!siteId) return;
+    const list = getTasks(siteId);
+    setTasks(list.map((t) => ({ id: t.id, title: t.title, description: t.description, status: t.status })));
+    setLoading(false);
+    setRefreshing(false);
+  }, [siteId]);
 
   useEffect(() => {
     setLoading(true);
     fetchTasks();
+    // Auto-refresh when data changes
+    const unsubscribe = onDataChange(() => {
+      fetchTasks();
+    });
+    return unsubscribe;
   }, [fetchTasks]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchTasks();
+    forceUpdate((n) => n + 1);
+    setTimeout(() => setRefreshing(false), 400);
   };
 
-  const markComplete = async (taskId: string) => {
+  const markComplete = (taskId: string) => {
     if (!taskId) return;
     setUpdating(taskId);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}/status`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: 'completed' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Update failed');
-      await fetchTasks();
-    } catch (e: unknown) {
+      updateTaskStatus(taskId, 'completed');
+      fetchTasks();
+      forceUpdate((n) => n + 1);
+      Alert.alert('Success', 'Task marked complete');
+    } catch (e) {
       Alert.alert('Error', e instanceof Error ? e.message : 'Update failed');
     } finally {
       setUpdating(null);
     }
   };
 
+  if (!siteId) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="dark" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>Missing site</Text>
+          <TouchableOpacity style={styles.backBtnFull} onPress={() => router.back()}>
+            <Text style={styles.backBtnText}>Go back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText} allowFontScaling={false}>← Back</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#111" />
         </TouchableOpacity>
-        <Text style={styles.title} allowFontScaling={false}>My Assigned Tasks</Text>
-        <View style={styles.back} />
+        <Text style={styles.title}>My Assigned Tasks</Text>
+        <View style={styles.backBtn} />
       </View>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DESIGN.colors.primary]} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DESIGN.colors.primary]} />}
       >
         {loading ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color={DESIGN.colors.primary} />
-            <Text style={styles.loadingText} allowFontScaling={false}>Loading...</Text>
+            <Text style={styles.loadingText}>Loading…</Text>
           </View>
         ) : tasks.length === 0 ? (
           <View style={styles.empty}>
-            <Text style={styles.emptyText} allowFontScaling={false}>No tasks assigned</Text>
-            <Text style={styles.emptyHint} allowFontScaling={false}>Daily assigned work will appear here</Text>
+            <Text style={styles.emptyText}>No tasks assigned</Text>
           </View>
         ) : (
           tasks.map((t) => (
-            <LabourCard key={t._id || t.id}>
-              <Text style={styles.taskTitle} allowFontScaling={false}>{t.title}</Text>
-              {t.description ? (
-                <Text style={styles.taskDesc} allowFontScaling={false} numberOfLines={2}>{t.description}</Text>
-              ) : null}
-              <View style={styles.taskRow}>
+            <View key={t.id} style={styles.card}>
+              <View style={styles.row}>
+                <Text style={styles.taskTitle}>{t.title}</Text>
                 <View style={[styles.badge, t.status === 'completed' && styles.badgeDone]}>
-                  <Text style={styles.badgeText} allowFontScaling={false}>{t.status}</Text>
+                  <Text style={styles.badgeText}>{t.status}</Text>
                 </View>
-                {t.status !== 'completed' && (
-                  <TouchableOpacity
-                    style={[styles.btn, styles.btnPrimary, updating === (t._id || t.id) && styles.btnDisabled]}
-                    onPress={() => markComplete(t._id || t.id || '')}
-                    disabled={!!updating}
-                  >
-                    {updating === (t._id || t.id) ? (
-                      <ActivityIndicator size="small" color={DESIGN.colors.surface} />
-                    ) : (
-                      <Text style={styles.btnText} allowFontScaling={false}>Mark complete</Text>
-                    )}
-                  </TouchableOpacity>
-                )}
               </View>
-            </LabourCard>
+              {t.description ? <Text style={styles.taskDesc} numberOfLines={2}>{t.description}</Text> : null}
+              {t.status !== 'completed' ? (
+                <TouchableOpacity
+                  style={[styles.completeBtn, updating === t.id && styles.completeBtnDisabled]}
+                  onPress={() => markComplete(t.id)}
+                  disabled={!!updating}
+                >
+                  {updating === t.id ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.completeBtnText}>Mark complete</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+            </View>
           ))
         )}
       </ScrollView>
@@ -154,46 +138,50 @@ export default function LabourTasksScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: DESIGN.colors.background },
+  container: { flex: 1, backgroundColor: DESIGN.colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: DESIGN.BASE_PADDING,
+    paddingHorizontal: DESIGN.spacing.lg,
     paddingVertical: DESIGN.spacing.md,
     backgroundColor: DESIGN.colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: DESIGN.colors.border,
   },
-  back: { minWidth: 72 },
-  backText: { fontSize: DESIGN.typography.subtitle, fontWeight: '600', color: DESIGN.colors.primary },
-  title: { fontSize: DESIGN.typography.subtitle, fontWeight: '700', color: DESIGN.colors.text.primary },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 18, fontWeight: '700', color: DESIGN.colors.text.primary },
   scroll: { flex: 1 },
-  content: { paddingHorizontal: DESIGN.BASE_PADDING, paddingVertical: DESIGN.spacing.lg, paddingBottom: DESIGN.spacing.xl * 3 },
+  content: { padding: DESIGN.spacing.lg, paddingBottom: DESIGN.spacing.xl * 2 },
   loading: { paddingVertical: DESIGN.spacing.xl * 2, alignItems: 'center' },
-  loadingText: { marginTop: DESIGN.spacing.md, fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary },
+  loadingText: { marginTop: DESIGN.spacing.md, fontSize: 14, color: DESIGN.colors.text.secondary },
   empty: { paddingVertical: DESIGN.spacing.xl * 2, alignItems: 'center' },
-  emptyText: { fontSize: DESIGN.typography.subtitle, fontWeight: '600', color: DESIGN.colors.text.primary, marginBottom: DESIGN.spacing.sm },
-  emptyHint: { fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary },
-  taskTitle: { fontSize: DESIGN.typography.subtitle, fontWeight: '700', color: DESIGN.colors.text.primary, marginBottom: DESIGN.spacing.xs },
-  taskDesc: { fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.md },
-  taskRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: DESIGN.spacing.sm },
-  badge: {
-    paddingHorizontal: DESIGN.spacing.sm,
-    paddingVertical: DESIGN.spacing.xs,
-    borderRadius: DESIGN.radius.sm,
-    backgroundColor: '#FEF3C7',
+  emptyText: { fontSize: 14, color: DESIGN.colors.text.secondary },
+  card: {
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.md,
+    padding: DESIGN.spacing.md,
+    marginBottom: DESIGN.spacing.md,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
+  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  taskTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: DESIGN.colors.text.primary },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FEF3C7' },
   badgeDone: { backgroundColor: '#D1FAE5' },
-  badgeText: { fontSize: DESIGN.typography.caption, fontWeight: '600', color: DESIGN.colors.text.primary },
-  btn: {
+  badgeText: { fontSize: 12, fontWeight: '600', color: DESIGN.colors.text.primary },
+  taskDesc: { fontSize: 14, color: DESIGN.colors.text.secondary, marginBottom: 12 },
+  completeBtn: {
+    alignSelf: 'flex-start',
+    backgroundColor: DESIGN.colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: DESIGN.radius.sm,
-    paddingHorizontal: DESIGN.spacing.md,
-    paddingVertical: DESIGN.spacing.sm,
-    minHeight: DESIGN.button.min,
-    justifyContent: 'center',
   },
-  btnPrimary: { backgroundColor: DESIGN.colors.primary },
-  btnDisabled: { opacity: 0.6 },
-  btnText: { fontSize: DESIGN.typography.caption, fontWeight: '600', color: DESIGN.colors.surface },
+  completeBtnDisabled: { opacity: 0.6 },
+  completeBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: DESIGN.spacing.xl },
+  errorText: { fontSize: 16, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.md },
+  backBtnFull: { backgroundColor: DESIGN.colors.primary, paddingHorizontal: DESIGN.spacing.xl, paddingVertical: DESIGN.spacing.md, borderRadius: DESIGN.radius.sm },
+  backBtnText: { fontSize: 14, fontWeight: '600', color: '#fff' },
 });

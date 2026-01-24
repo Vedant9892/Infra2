@@ -285,24 +285,24 @@ export default function Sites() {
               <View style={styles.actionRow}>
                 <TouchableOpacity
                   style={styles.actionButton}
+                  onPress={() => router.push(`/(owner)/stock/${site.id}`)}
+                >
+                  <Ionicons name="cube-outline" size={18} color="#8B5CF6" />
+                  <Text style={styles.actionButtonText}>Stock</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => router.push(`/(owner)/bills/${site.id}`)}
+                >
+                  <Ionicons name="receipt-outline" size={18} color="#8B5CF6" />
+                  <Text style={styles.actionButtonText}>Bills</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => Alert.alert('Workers', 'View all workers')}
                 >
                   <Ionicons name="people-outline" size={18} color="#8B5CF6" />
                   <Text style={styles.actionButtonText}>Workers</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => Alert.alert('Materials', 'View materials')}
-                >
-                  <Ionicons name="cube-outline" size={18} color="#8B5CF6" />
-                  <Text style={styles.actionButtonText}>Materials</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => Alert.alert('Updates', 'View updates')}
-                >
-                  <Ionicons name="time-outline" size={18} color="#8B5CF6" />
-                  <Text style={styles.actionButtonText}>Updates</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>

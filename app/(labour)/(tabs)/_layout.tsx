@@ -1,28 +1,31 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { DESIGN } from '../../../constants/designSystem';
-
-const TAB_BG = '#111111';
-const TAB_ACTIVE = '#FFFFFF';
-const TAB_INACTIVE = '#9CA3AF';
 
 export default function LabourTabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarActiveTintColor: '#8B5CF6',
+        tabBarInactiveTintColor: '#FFFFFF',
         tabBarStyle: {
-          backgroundColor: TAB_BG,
+          backgroundColor: '#111111',
           borderTopWidth: 0,
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
+          borderRadius: 30,
+          marginHorizontal: 20,
+          marginBottom: 20,
+          position: 'absolute',
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 12,
+          elevation: 10,
         },
-        tabBarActiveTintColor: TAB_ACTIVE,
-        tabBarInactiveTintColor: TAB_INACTIVE,
-        tabBarShowLabel: true,
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
         },
       }}

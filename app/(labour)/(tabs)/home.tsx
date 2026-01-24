@@ -1,3 +1,4 @@
+/** Labour Home – mock API only. Join via code (e.g. SITE-A1). No backend. */
 import React, { useCallback, useState } from 'react';
 import {
   View,
@@ -9,78 +10,43 @@ import {
   RefreshControl,
   StyleSheet,
   Alert,
-  Platform,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../../contexts/UserContext';
-import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../../constants/api';
 import { DESIGN } from '../../../constants/designSystem';
-import { LabourCard } from '../../../components/LabourCard';
-import { LabourDashboardHeader } from '../../../components/LabourDashboardHeader';
-
-interface Site {
-  _id: string;
-  name: string;
-  role?: string;
-  address?: string;
-  isActive?: boolean;
-}
+import { DashboardHeader } from '../../../components/DashboardHeader';
+import { getSitesForLabour, joinSiteByCode, onDataChange } from '../../../lib/mock-api';
 
 export default function LabourHomeScreen() {
   const router = useRouter();
-  const { token, user } = useUser();
-  const [sites, setSites] = useState<Site[]>([]);
+  const { user } = useUser();
+  const [sites, setSites] = useState<{ id: string; name: string; address?: string; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [siteCode, setSiteCode] = useState('');
   const [joinError, setJoinError] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
 
-  const fetchMySites = useCallback(async () => {
-    // Use existing API to get sites for labour (auto-assigned to Vasantdada)
-    if (!user?.id) {
-      setLoading(false);
-      setSites([]);
-      return;
-    }
-    try {
-      // Try new endpoint first, fallback to existing
-      let res = await fetch(`${API_BASE_URL}${LABOUR_ENDPOINTS.SITE.GET_MY_SITES}?userId=${user.id}`);
-      let data = await res.json();
-      
-      // If new endpoint doesn't work, use existing
-      if (!res.ok || !Array.isArray(data)) {
-        res = await fetch(`${API_BASE_URL}/api/sites/labour/${user.id}`);
-        data = await res.json();
-        if (res.ok && data.success && Array.isArray(data.sites)) {
-          setSites(data.sites.map((s: any) => ({
-            _id: s.id,
-            name: s.name,
-            address: s.address,
-            isActive: s.status === 'active',
-          })));
-        } else {
-          setSites([]);
-        }
-      } else {
-        // New endpoint worked
-        setSites(data);
-      }
-    } catch {
-      setSites([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+  const fetchMySites = useCallback(() => {
+    const uid = user?.id ?? 'u1';
+    setSites(getSitesForLabour(uid));
+    setLoading(false);
+    setRefreshing(false);
   }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
       fetchMySites();
+      // Auto-refresh when data changes
+      const unsubscribe = onDataChange(() => {
+        fetchMySites();
+      });
+      return unsubscribe;
     }, [fetchMySites])
   );
 
@@ -90,192 +56,141 @@ export default function LabourHomeScreen() {
   };
 
   const hasSite = sites.length > 0;
-  const primarySite = sites.find((s) => s.isActive !== false) ?? sites[0];
 
-  const handleConnect = async () => {
+  const handleConnect = () => {
     const code = siteCode.trim();
     if (!code) {
-      setJoinError('Please enter a site code');
+      setJoinError('Please enter a site code (e.g. SITE-A1)');
       return;
     }
-    if (!user?.id) {
-      Alert.alert('Error', 'Not signed in');
+    const uid = user?.id ?? 'u1';
+    const result = joinSiteByCode(code, uid);
+    if (!result.success) {
+      setJoinError('Invalid code. Try SITE-A1, SITE-B2, or SITE-C3.');
       return;
     }
-    setJoinLoading(true);
+    setSiteCode('');
     setJoinError('');
-    try {
-      const res = await fetch(`${API_BASE_URL}${LABOUR_ENDPOINTS.SITE.JOIN}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          siteCode: code.toUpperCase(),
-          userId: user?.id,
-        }),
-      });
-      
-      const contentType = res.headers.get('content-type');
-      if (!contentType?.includes('application/json')) {
-        const text = await res.text();
-        console.error('Non-JSON response:', text);
-        throw new Error(`Server error: ${res.status} ${res.statusText}`);
-      }
-      
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to connect');
-      }
-      setSiteCode('');
-      Alert.alert('Success', `Connected to ${data.site?.name || 'site'}`);
-      await fetchMySites();
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Failed to connect';
-      console.error('Join site error:', e);
-      setJoinError(msg);
-      Alert.alert('Error', msg);
-    } finally {
-      setJoinLoading(false);
-    }
+    Alert.alert('Success', `Connected to ${result.site?.name ?? 'site'}`);
+    fetchMySites();
+  };
+
+  const handleScanQR = () => {
+    router.push('/(labour)/scan-qr');
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <LabourDashboardHeader />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="dark" />
+        <DashboardHeader name={user?.name || 'Labour'} role="LABOUR" profilePhoto={user?.profilePhoto} />
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" color={DESIGN.colors.primary} />
-          <Text style={styles.loadingText} allowFontScaling={false}>Loading...</Text>
+          <Text style={styles.loadingText}>Loading…</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <LabourDashboardHeader />
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[DESIGN.colors.primary]} />
         }
       >
-        {!hasSite ? (
-          <View style={styles.connectWrap}>
-            <Text style={styles.hint} allowFontScaling={false}>
-              Enter site code provided by manager (or you're auto-assigned to Vasantdada Patil College)
+        <DashboardHeader name={user?.name || 'Labour'} role="LABOUR" profilePhoto={user?.profilePhoto} />
+
+        <View style={styles.joinSection}>
+          <Text style={styles.sectionTitle}>Join site</Text>
+          <Text style={styles.hint}>Use code SITE-A1 or SITE-B2. Scan QR or enter below.</Text>
+
+          <TouchableOpacity style={styles.scanCard} onPress={handleScanQR}>
+            <View style={[styles.scanIcon, { backgroundColor: '#F3E8FF' }]}>
+              <Ionicons name="qr-code" size={32} color={DESIGN.colors.primary} />
+            </View>
+            <Text style={styles.scanTitle}>Scan Site QR</Text>
+            <Text style={styles.scanSub}>Opens scanner</Text>
+          </TouchableOpacity>
+
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>or enter code</Text>
+            <View style={styles.orLine} />
+          </View>
+
+          <View style={styles.inputCard}>
+            <TextInput
+              style={[styles.input, joinError ? styles.inputError : null]}
+              placeholder="e.g. SITE-A1"
+              placeholderTextColor={DESIGN.colors.text.secondary}
+              value={siteCode}
+              onChangeText={(t) => {
+                setSiteCode(t.toUpperCase());
+                setJoinError('');
+              }}
+              maxLength={20}
+              autoCapitalize="characters"
+              editable={!joinLoading}
+            />
+            {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.btn, styles.btnPrimary, joinLoading && styles.btnDisabled]}
+              onPress={handleConnect}
+              disabled={joinLoading}
+            >
+              <Text style={styles.btnText}>Connect to Site</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {hasSite ? (
+          <View style={styles.hintCard}>
+            <Ionicons name="information-circle" size={22} color={DESIGN.colors.primary} />
+            <Text style={styles.hintCardText}>
+              You have {sites.length} site{sites.length !== 1 ? 's' : ''}. Open Projects to work.
             </Text>
-            <LabourCard>
-              <Text style={styles.cardLabel} allowFontScaling={false}>Site Code</Text>
-              <TextInput
-                style={[styles.input, joinError ? styles.inputError : null]}
-                placeholder="e.g. SPIT-11223"
-                placeholderTextColor={DESIGN.colors.text.tertiary}
-                value={siteCode}
-                onChangeText={(t) => {
-                  setSiteCode(t.toUpperCase());
-                  setJoinError('');
-                }}
-                maxLength={20}
-                autoCapitalize="characters"
-                editable={!joinLoading}
-                allowFontScaling={false}
-              />
-              {joinError ? (
-                <Text style={styles.errorText} allowFontScaling={false}>{joinError}</Text>
-              ) : null}
-              <TouchableOpacity
-                style={[styles.btn, styles.btnPrimary, joinLoading && styles.btnDisabled]}
-                onPress={handleConnect}
-                disabled={joinLoading}
-              >
-                {joinLoading ? (
-                  <ActivityIndicator color={DESIGN.colors.surface} />
-                ) : (
-                  <Text style={styles.btnText} allowFontScaling={false}>Connect to Site</Text>
-                )}
-              </TouchableOpacity>
-            </LabourCard>
           </View>
-        ) : (
-          <View style={styles.quickSection}>
-            <Text style={styles.sectionTitle} allowFontScaling={false}>Quick Actions</Text>
-            <LabourCard>
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => primarySite && router.push(`/(labour)/attendance/${primarySite._id}`)}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: '#E0E7FF' }]}>
-                  <Ionicons name="location" size={24} color={DESIGN.colors.primary} />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle} allowFontScaling={false}>Mark Attendance</Text>
-                  <Text style={styles.actionSub} allowFontScaling={false}>GPS + Photo required</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
-              </TouchableOpacity>
-            </LabourCard>
-            <LabourCard>
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => primarySite && router.push(`/(labour)/tasks/${primarySite._id}`)}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: '#D1FAE5' }]}>
-                  <Ionicons name="clipboard" size={24} color={DESIGN.colors.success} />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle} allowFontScaling={false}>My Assigned Tasks</Text>
-                  <Text style={styles.actionSub} allowFontScaling={false}>Daily assigned work</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
-              </TouchableOpacity>
-            </LabourCard>
-            <LabourCard>
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => primarySite && router.push(`/(labour)/documentation/${primarySite._id}`)}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-                  <Ionicons name="camera" size={24} color={DESIGN.colors.warning} />
-                </View>
-                <View style={styles.actionContent}>
-                  <Text style={styles.actionTitle} allowFontScaling={false}>Site Documentation</Text>
-                  <Text style={styles.actionSub} allowFontScaling={false}>Upload work photos</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={DESIGN.colors.text.tertiary} />
-              </TouchableOpacity>
-            </LabourCard>
-          </View>
-        )}
+        ) : null}
+
+        <View style={styles.bottomSpacer} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: DESIGN.colors.background },
+  container: { flex: 1, backgroundColor: DESIGN.colors.background },
   scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: DESIGN.BASE_PADDING,
-    paddingVertical: DESIGN.spacing.xl,
-    paddingBottom: DESIGN.spacing.xl * 3,
-  },
   loadingWrap: { flex: 1, paddingVertical: DESIGN.spacing.xl * 2, alignItems: 'center' },
   loadingText: { marginTop: DESIGN.spacing.md, fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary },
-  connectWrap: { paddingVertical: DESIGN.spacing.xl },
-  hint: {
-    fontSize: DESIGN.typography.body,
-    color: DESIGN.colors.text.secondary,
+  joinSection: { paddingHorizontal: DESIGN.spacing.lg, paddingTop: DESIGN.spacing.xl },
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: DESIGN.colors.text.primary, marginBottom: DESIGN.spacing.sm },
+  hint: { fontSize: DESIGN.typography.body, color: DESIGN.colors.text.secondary, marginBottom: DESIGN.spacing.xl },
+  scanCard: {
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.lg,
+    padding: DESIGN.spacing.xl,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
     marginBottom: DESIGN.spacing.lg,
-    textAlign: 'center',
   },
-  cardLabel: {
-    fontSize: DESIGN.typography.body,
-    fontWeight: '600',
-    color: DESIGN.colors.text.primary,
-    marginBottom: DESIGN.spacing.sm,
+  scanIcon: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: DESIGN.spacing.md },
+  scanTitle: { fontSize: 16, fontWeight: '700', color: DESIGN.colors.text.primary },
+  scanSub: { fontSize: 13, color: DESIGN.colors.text.secondary, marginTop: 4 },
+  orRow: { flexDirection: 'row', alignItems: 'center', marginBottom: DESIGN.spacing.lg },
+  orLine: { flex: 1, height: 1, backgroundColor: DESIGN.colors.border },
+  orText: { marginHorizontal: DESIGN.spacing.md, fontSize: 13, color: DESIGN.colors.text.secondary },
+  inputCard: {
+    backgroundColor: DESIGN.colors.surface,
+    borderRadius: DESIGN.radius.lg,
+    padding: DESIGN.spacing.lg,
+    borderWidth: 1,
+    borderColor: DESIGN.colors.border,
   },
   input: {
     borderWidth: 1,
@@ -287,57 +202,22 @@ const styles = StyleSheet.create({
     color: DESIGN.colors.text.primary,
     marginBottom: DESIGN.spacing.md,
   },
-  inputError: {
-    borderColor: DESIGN.colors.danger,
-    backgroundColor: '#FEF2F2',
-  },
-  errorText: {
-    fontSize: DESIGN.typography.caption,
-    color: DESIGN.colors.danger,
-    marginBottom: DESIGN.spacing.sm,
-  },
-  btn: {
-    borderRadius: DESIGN.radius.sm,
-    paddingVertical: DESIGN.spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: DESIGN.button.min,
-  },
+  inputError: { borderColor: DESIGN.colors.danger, backgroundColor: '#FEF2F2' },
+  errorText: { fontSize: DESIGN.typography.caption, color: DESIGN.colors.danger, marginBottom: DESIGN.spacing.sm },
+  btn: { borderRadius: DESIGN.radius.sm, paddingVertical: DESIGN.spacing.md, alignItems: 'center', justifyContent: 'center', minHeight: DESIGN.button.min },
   btnPrimary: { backgroundColor: DESIGN.colors.primary },
   btnDisabled: { opacity: 0.6 },
-  btnText: {
-    fontSize: DESIGN.typography.subtitle,
-    fontWeight: '600',
-    color: DESIGN.colors.surface,
-  },
-  quickSection: { paddingBottom: DESIGN.spacing.xl },
-  sectionTitle: {
-    fontSize: DESIGN.typography.subtitle,
-    fontWeight: '700',
-    color: DESIGN.colors.text.primary,
-    marginBottom: DESIGN.spacing.lg,
-  },
-  actionRow: {
+  btnText: { fontSize: DESIGN.typography.subtitle, fontWeight: '600', color: '#fff' },
+  hintCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F3E8FF',
+    marginHorizontal: DESIGN.spacing.lg,
+    marginTop: DESIGN.spacing.xl,
+    padding: DESIGN.spacing.md,
+    borderRadius: DESIGN.radius.md,
+    gap: DESIGN.spacing.sm,
   },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: DESIGN.radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: DESIGN.spacing.md,
-  },
-  actionContent: { flex: 1 },
-  actionTitle: {
-    fontSize: DESIGN.typography.subtitle,
-    fontWeight: '600',
-    color: DESIGN.colors.text.primary,
-  },
-  actionSub: {
-    fontSize: DESIGN.typography.caption,
-    color: DESIGN.colors.text.secondary,
-    marginTop: DESIGN.spacing.xs,
-  },
+  hintCardText: { flex: 1, fontSize: 14, fontWeight: '600', color: DESIGN.colors.primary },
+  bottomSpacer: { height: 120 },
 });

@@ -8,12 +8,15 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Modal,
+  StyleSheet as RNStyleSheet,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import SiteCodeManagement from '../../mobile-components/SiteCodeManagement';
+import { getSiteById, createSite } from '../../lib/mock-api';
 
 type Worker = {
   id: string;
@@ -44,9 +47,25 @@ export default function SiteDetail() {
   const [pendingEnrollments, setPendingEnrollments] = useState<PendingEnrollment[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [siteData, setSiteData] = useState<any>(null);
+
+  // Fetch site data from mock-api
+  useEffect(() => {
+    if (id) {
+      const fetchedSite = getSiteById(id);
+      if (fetchedSite) {
+        setSiteData(fetchedSite);
+      } else {
+        // If site doesn't exist, create a default one with enrollment code
+        const newSite = createSite('owner1', 'Mumbai Residential Complex', 'Andheri West, Mumbai');
+        setSiteData({ ...newSite, location: 'Andheri West, Mumbai', status: 'active', progress: 67, workersCount: 45, budget: '₹2.5 Cr' });
+      }
+    }
+  }, [id]);
 
   // Sample site data (fetch from API in production)
-  const site = {
+  const site = siteData || {
     id,
     name: 'Mumbai Residential Complex',
     location: 'Andheri West, Mumbai',
@@ -54,6 +73,7 @@ export default function SiteDetail() {
     progress: 67,
     workersCount: 45,
     budget: '₹2.5 Cr',
+    enrollmentCode: 'SITE-A1',
   };
 
   useEffect(() => {
@@ -167,6 +187,34 @@ export default function SiteDetail() {
 
       {/* Enrollment Code Management */}
       <SiteCodeManagement siteId={id} siteName={site.name} />
+      
+      {/* QR Code Button - Direct Access */}
+      <TouchableOpacity 
+        style={styles.qrButton}
+        onPress={() => {
+          if (!site.enrollmentCode && id) {
+            const fetchedSite = getSiteById(id);
+            if (!fetchedSite?.enrollmentCode) {
+              Alert.alert('Error', 'Site enrollment code not found. Generating new code...');
+              // Create site with enrollment code if it doesn't exist
+              const newSite = createSite('owner1', site.name, site.location || '');
+              router.push(`/(owner)/site-qr/${id}`);
+              return;
+            }
+          }
+          router.push(`/(owner)/site-qr/${id}`);
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.qrIconContainer}>
+          <Ionicons name="qr-code" size={28} color="#8B5CF6" />
+        </View>
+        <View style={styles.qrButtonText}>
+          <Text style={styles.qrButtonTitle}>Generate Site QR Code</Text>
+          <Text style={styles.qrButtonSubtitle}>Share QR code for site enrollment</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={24} color="#9CA3AF" />
+      </TouchableOpacity>
 
       {/* Quick Actions */}
       <View style={styles.actionsSection}>
@@ -346,7 +394,100 @@ export default function SiteDetail() {
           <Text style={styles.headerTitle}>{site.name}</Text>
           <Text style={styles.headerSubtitle}>{site.location}</Text>
         </View>
+        <TouchableOpacity 
+          style={styles.menuButton}
+          onPress={() => {
+            console.log('Menu button pressed, showing menu');
+            setShowMenu(true);
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
+        </TouchableOpacity>
       </LinearGradient>
+
+      {/* 3 Dots Menu Modal */}
+      <Modal
+        visible={showMenu}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          console.log('Modal close requested');
+          setShowMenu(false);
+        }}
+      >
+        <View style={styles.menuOverlay}>
+          <TouchableOpacity
+            style={RNStyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowMenu(false)}
+          />
+          <View style={styles.menuContainer}>
+            <View style={styles.menuHandle} />
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                // Ensure site has enrollment code
+                if (!site.enrollmentCode && id) {
+                  const fetchedSite = getSiteById(id);
+                  if (!fetchedSite?.enrollmentCode) {
+                    Alert.alert('Error', 'Site enrollment code not found. Please contact support.');
+                    return;
+                  }
+                }
+                setTimeout(() => {
+                  router.push(`/(owner)/site-qr/${id}`);
+                }, 300);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="qr-code" size={24} color="#8B5CF6" />
+              <Text style={styles.menuItemText}>Generate Site QR</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                Alert.alert('Edit Site', 'Edit site feature coming soon');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={24} color="#6B7280" />
+              <Text style={styles.menuItemText}>Edit Site</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setShowMenu(false);
+                Alert.alert('Site Settings', 'Site settings coming soon');
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="settings-outline" size={24} color="#6B7280" />
+              <Text style={styles.menuItemText}>Settings</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemDanger]}
+              onPress={() => {
+                setShowMenu(false);
+                Alert.alert('Delete Site', 'Are you sure you want to delete this site?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Deleted', 'Site deleted') },
+                ]);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              <Text style={[styles.menuItemText, styles.menuItemTextDanger]}>Delete Site</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Tabs */}
       <View style={styles.tabBar}>
@@ -437,12 +578,82 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   backButton: {
     marginBottom: 12,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerContent: {
+    flex: 1,
     marginBottom: 8,
+    marginLeft: 12,
+    marginRight: 12,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    zIndex: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    borderRadius: 22,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  menuContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 40,
+    paddingTop: 12,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  menuHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#D1D5DB',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  menuItemDanger: {
+    marginTop: 8,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  menuItemTextDanger: {
+    color: '#EF4444',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 8,
   },
   headerTitle: {
     fontSize: 24,
@@ -784,5 +995,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#EF4444',
+  },
+  qrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#8B5CF6',
+  },
+  qrIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#F3E8FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrButtonText: {
+    flex: 1,
+    marginLeft: 16,
+  },
+  qrButtonTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 4,
+  },
+  qrButtonSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
   },
 });

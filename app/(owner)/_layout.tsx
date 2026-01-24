@@ -11,6 +11,12 @@ export default function OwnerLayout() {
       <Stack.Screen name="register" />
       <Stack.Screen name="sites" />
       <Stack.Screen name="add-site" />
+      <Stack.Screen name="site/[id]" />
+      <Stack.Screen name="site-detail" />
+      <Stack.Screen name="site-qr/[siteId]" />
+      <Stack.Screen name="stock/[siteId]" />
+      <Stack.Screen name="bills/[siteId]" />
+      <Stack.Screen name="profile" />
     </Stack>
   );
 }

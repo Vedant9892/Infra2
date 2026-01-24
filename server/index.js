@@ -50,6 +50,16 @@ const materialRequestsCollection = () => {
   return db.collection('materialRequests');
 };
 
+const stockCollection = () => {
+  if (!db) throw new Error('DB not initialized');
+  return db.collection('stock');
+};
+
+const billsCollection = () => {
+  if (!db) throw new Error('DB not initialized');
+  return db.collection('bills');
+};
+
 async function resolveUserRole(identifier) {
   if (!identifier) return null;
   const users = usersCollection();
@@ -1381,6 +1391,359 @@ app.patch('/api/materials/:id/status', async (req, res) => {
     });
   } catch (err) {
     console.error('Update material request error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ==================== STOCK TRACKING API ====================
+
+// Get all stock items for a site
+app.get('/api/stock/:siteId', async (req, res) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return res.status(400).json({ success: false, message: 'siteId is required' });
+    }
+
+    const stock = stockCollection();
+    const items = await stock.find({ siteId: String(siteId) }).sort({ createdAt: -1 }).toArray();
+    
+    return res.json({
+      success: true,
+      items: items.map(item => ({
+        id: item._id.toString(),
+        siteId: item.siteId,
+        name: item.name,
+        category: item.category,
+        quantity: item.quantity,
+        unit: item.unit,
+        minThreshold: item.minThreshold,
+        location: item.location,
+        notes: item.notes,
+        lastUpdated: item.lastUpdated || item.createdAt,
+        createdAt: item.createdAt,
+      }))
+    });
+  } catch (err) {
+    console.error('Get stock error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Add new stock item
+app.post('/api/stock', async (req, res) => {
+  try {
+    const { siteId, name, category, quantity, unit, minThreshold, location, notes } = req.body || {};
+    
+    if (!siteId || !name || quantity === undefined) {
+      return res.status(400).json({ success: false, message: 'siteId, name, and quantity are required' });
+    }
+
+    const stock = stockCollection();
+    const newItem = {
+      siteId: String(siteId),
+      name: String(name).trim(),
+      category: category ? String(category).trim() : 'General',
+      quantity: Number(quantity),
+      unit: unit ? String(unit).trim() : 'units',
+      minThreshold: minThreshold ? Number(minThreshold) : 0,
+      location: location ? String(location).trim() : '',
+      notes: notes ? String(notes).trim() : '',
+      createdAt: new Date(),
+      lastUpdated: new Date(),
+    };
+
+    const result = await stock.insertOne(newItem);
+    
+    return res.json({
+      success: true,
+      item: {
+        id: result.insertedId.toString(),
+        ...newItem,
+      }
+    });
+  } catch (err) {
+    console.error('Add stock error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Update stock item
+app.put('/api/stock/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, category, quantity, unit, minThreshold, location, notes } = req.body || {};
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'id is required' });
+    }
+
+    const stock = stockCollection();
+    const update = { lastUpdated: new Date() };
+    
+    if (name !== undefined) update.name = String(name).trim();
+    if (category !== undefined) update.category = String(category).trim();
+    if (quantity !== undefined) update.quantity = Number(quantity);
+    if (unit !== undefined) update.unit = String(unit).trim();
+    if (minThreshold !== undefined) update.minThreshold = Number(minThreshold);
+    if (location !== undefined) update.location = String(location).trim();
+    if (notes !== undefined) update.notes = String(notes).trim();
+
+    const result = await stock.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: update },
+      { returnDocument: 'after' }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ success: false, message: 'Stock item not found' });
+    }
+
+    return res.json({
+      success: true,
+      item: {
+        id: result.value._id.toString(),
+        ...result.value,
+      }
+    });
+  } catch (err) {
+    console.error('Update stock error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Delete stock item
+app.delete('/api/stock/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'id is required' });
+    }
+
+    const stock = stockCollection();
+    const result = await stock.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Stock item not found' });
+    }
+
+    return res.json({ success: true, message: 'Stock item deleted successfully' });
+  } catch (err) {
+    console.error('Delete stock error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// ==================== GST BILLING API ====================
+
+// Get all bills for a site
+app.get('/api/bills/:siteId', async (req, res) => {
+  try {
+    const { siteId } = req.params;
+    if (!siteId) {
+      return res.status(400).json({ success: false, message: 'siteId is required' });
+    }
+
+    const bills = billsCollection();
+    const billList = await bills.find({ siteId: String(siteId) }).sort({ createdAt: -1 }).toArray();
+    
+    return res.json({
+      success: true,
+      bills: billList.map(bill => ({
+        id: bill._id.toString(),
+        siteId: bill.siteId,
+        amount: bill.amount,
+        reason: bill.reason,
+        billImageUrl: bill.billImageUrl,
+        ocrData: bill.ocrData,
+        gstNumber: bill.gstNumber,
+        vendorName: bill.vendorName,
+        billNumber: bill.billNumber,
+        billDate: bill.billDate,
+        createdAt: bill.createdAt,
+        createdBy: bill.createdBy,
+      }))
+    });
+  } catch (err) {
+    console.error('Get bills error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Get bills for a specific supervisor (filtered by createdBy)
+app.get('/api/bills/supervisor/:supervisorId', async (req, res) => {
+  try {
+    const { supervisorId } = req.params;
+    const { siteId } = req.query || {};
+    
+    if (!supervisorId) {
+      return res.status(400).json({ success: false, message: 'supervisorId is required' });
+    }
+
+    const bills = billsCollection();
+    const query = { createdBy: String(supervisorId) };
+    
+    // Optionally filter by siteId if provided
+    if (siteId) {
+      query.siteId = String(siteId);
+    }
+    
+    const billList = await bills.find(query).sort({ createdAt: -1 }).toArray();
+    
+    return res.json({
+      success: true,
+      bills: billList.map(bill => ({
+        id: bill._id.toString(),
+        siteId: bill.siteId,
+        amount: bill.amount,
+        reason: bill.reason,
+        billImageUrl: bill.billImageUrl,
+        createdAt: bill.createdAt,
+        createdBy: bill.createdBy,
+      }))
+    });
+  } catch (err) {
+    console.error('Get supervisor bills error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Add new bill
+app.post('/api/bills', async (req, res) => {
+  try {
+    const { siteId, amount, reason, billImageUrl, ocrData, gstNumber, vendorName, billNumber, billDate, createdBy } = req.body || {};
+    
+    if (!siteId || !amount || !reason) {
+      return res.status(400).json({ success: false, message: 'siteId, amount, and reason are required' });
+    }
+
+    const bills = billsCollection();
+    const newBill = {
+      siteId: String(siteId),
+      amount: Number(amount),
+      reason: String(reason).trim(),
+      billImageUrl: billImageUrl || null,
+      ocrData: ocrData || null,
+      gstNumber: gstNumber ? String(gstNumber).trim() : null,
+      vendorName: vendorName ? String(vendorName).trim() : null,
+      billNumber: billNumber ? String(billNumber).trim() : null,
+      billDate: billDate ? new Date(billDate) : new Date(),
+      createdAt: new Date(),
+      createdBy: createdBy || null,
+    };
+
+    const result = await bills.insertOne(newBill);
+    
+    return res.json({
+      success: true,
+      bill: {
+        id: result.insertedId.toString(),
+        ...newBill,
+      }
+    });
+  } catch (err) {
+    console.error('Add bill error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Update bill
+app.put('/api/bills/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, reason, billImageUrl, ocrData, gstNumber, vendorName, billNumber, billDate } = req.body || {};
+    
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'id is required' });
+    }
+
+    const bills = billsCollection();
+    const update = {};
+    
+    if (amount !== undefined) update.amount = Number(amount);
+    if (reason !== undefined) update.reason = String(reason).trim();
+    if (billImageUrl !== undefined) update.billImageUrl = billImageUrl;
+    if (ocrData !== undefined) update.ocrData = ocrData;
+    if (gstNumber !== undefined) update.gstNumber = gstNumber ? String(gstNumber).trim() : null;
+    if (vendorName !== undefined) update.vendorName = vendorName ? String(vendorName).trim() : null;
+    if (billNumber !== undefined) update.billNumber = billNumber ? String(billNumber).trim() : null;
+    if (billDate !== undefined) update.billDate = billDate ? new Date(billDate) : new Date();
+
+    const result = await bills.findOneAndUpdate(
+      { _id: new ObjectId(id) },
+      { $set: update },
+      { returnDocument: 'after' }
+    );
+
+    if (!result.value) {
+      return res.status(404).json({ success: false, message: 'Bill not found' });
+    }
+
+    return res.json({
+      success: true,
+      bill: {
+        id: result.value._id.toString(),
+        ...result.value,
+      }
+    });
+  } catch (err) {
+    console.error('Update bill error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// Delete bill
+app.delete('/api/bills/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'id is required' });
+    }
+
+    const bills = billsCollection();
+    const result = await bills.deleteOne({ _id: new ObjectId(id) });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Bill not found' });
+    }
+
+    return res.json({ success: true, message: 'Bill deleted successfully' });
+  } catch (err) {
+    console.error('Delete bill error', err);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+});
+
+// OCR endpoint for bill scanning (basic implementation - can be enhanced with actual OCR service)
+app.post('/api/bills/ocr', async (req, res) => {
+  try {
+    const { imageUrl, imageBase64 } = req.body || {};
+    
+    if (!imageUrl && !imageBase64) {
+      return res.status(400).json({ success: false, message: 'imageUrl or imageBase64 is required' });
+    }
+
+    // TODO: Integrate actual OCR service (e.g., Google Vision API, Tesseract.js, etc.)
+    // For now, return a placeholder response
+    // In production, you would:
+    // 1. Process the image with OCR service
+    // 2. Extract text, amounts, GST numbers, dates, etc.
+    // 3. Return structured data
+    
+    return res.json({
+      success: true,
+      ocrData: {
+        extractedText: 'OCR processing would extract text from the bill image here',
+        amount: null,
+        gstNumber: null,
+        vendorName: null,
+        billNumber: null,
+        billDate: null,
+        note: 'OCR feature requires integration with an OCR service. Please enter details manually or upload image for record keeping.',
+      }
+    });
+  } catch (err) {
+    console.error('OCR error', err);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 });

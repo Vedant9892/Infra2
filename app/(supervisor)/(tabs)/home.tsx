@@ -17,47 +17,46 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { useRouter } from 'expo-router';
 import { useUser } from '../../../contexts/UserContext';
-import { API_BASE_URL } from '../../../constants/api';
 import { DESIGN } from '../../../constants/designSystem';
+import { DashboardHeader } from '../../../components/DashboardHeader';
+import { DashboardQuickActions, type QuickAction } from '../../../components/DashboardQuickActions';
+import { DashboardDateStrip } from '../../../components/DashboardDateStrip';
+import { DashboardYourTasks } from '../../../components/DashboardYourTasks';
+import { getAttendancePending, approveAttendance, onDataChange } from '../../../lib/mock-api';
 
 export default function SupervisorHomeScreen() {
   const router = useRouter();
   const { user } = useUser();
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [pendingAttendance, setPendingAttendance] = useState<any[]>([]);
   const [showPendingAttendanceModal, setShowPendingAttendanceModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const siteId = user?.currentSiteId ?? 's1';
 
-  // Fetch pending attendance for supervisor approval
-  const fetchPendingAttendance = useCallback(async () => {
-    if (!user?.id || !user?.currentSiteId) {
-      setPendingAttendance([]);
-      return;
-    }
-
+  const fetchPendingAttendance = useCallback(() => {
     setLoading(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/attendance/pending?siteId=${user.currentSiteId}&supervisorId=${user.id}`
-      );
-      const data = await response.json();
+    const list = getAttendancePending(siteId);
+    setPendingAttendance(list.map((a) => ({ id: a.id, userId: a.userId, address: a.address, timestamp: a.timestamp, date: a.timestamp, status: a.status })));
+    setLoading(false);
+    setRefreshing(false);
+  }, [siteId]);
 
-      if (response.ok && data.success) {
-        setPendingAttendance(data.pending || []);
-      } else {
-        setPendingAttendance([]);
-      }
-    } catch (error) {
-      console.error('Fetch pending attendance error:', error);
-      setPendingAttendance([]);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user?.id, user?.currentSiteId]);
+  // Auto-refresh when data changes (cross-dashboard communication)
+  useEffect(() => {
+    fetchPendingAttendance();
+    const unsubscribe = onDataChange(() => {
+      fetchPendingAttendance();
+    });
+    return unsubscribe;
+  }, [fetchPendingAttendance]);
 
   useEffect(() => {
     fetchPendingAttendance();
+    const unsubscribe = onDataChange(() => {
+      fetchPendingAttendance();
+    });
+    return unsubscribe;
   }, [fetchPendingAttendance]);
 
   const onRefresh = () => {
@@ -65,43 +64,65 @@ export default function SupervisorHomeScreen() {
     fetchPendingAttendance();
   };
 
-  // Approve or reject attendance
-  const handleApproveAttendance = async (attendanceId: number, approved: boolean) => {
-    if (!user?.id) return;
-
+  const handleApproveAttendance = (attendanceId: string, approved: boolean) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/attendance/${attendanceId}/approve`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          approved: approved,
-          supervisorId: Number(user.id),
-          reason: approved ? undefined : 'Rejected by supervisor',
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        Alert.alert('Success', data.message || (approved ? 'Attendance approved' : 'Attendance rejected'));
-        fetchPendingAttendance(); // Refresh list
-      } else {
-        Alert.alert('Error', data.error || 'Failed to update attendance');
-      }
-    } catch (error) {
-      console.error('Approve attendance error:', error);
-      Alert.alert('Error', 'Failed to update attendance. Please try again.');
+      approveAttendance(attendanceId, approved);
+      Alert.alert('Success', approved ? 'Attendance approved' : 'Attendance rejected');
+      fetchPendingAttendance();
+    } catch {
+      Alert.alert('Error', 'Failed to update attendance.');
     }
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  };
-
-  const features = [
+  const actions: QuickAction[] = [
+    {
+      id: 'projects',
+      icon: 'folder',
+      title: 'My Projects',
+      subtitle: 'View all projects',
+      color: '#8B5CF6',
+      onPress: () => router.push('/(supervisor)/projects'),
+    },
+    {
+      id: 'approve',
+      icon: 'document-text',
+      title: 'Approve Work',
+      subtitle: 'Site photos & documentation',
+      color: '#3B82F6',
+      onPress: () => router.push('/(supervisor)/approve-work'),
+    },
+    {
+      id: 'assign',
+      icon: 'people',
+      title: 'Assigned Task',
+      subtitle: 'Delegate to labour',
+      color: '#10B981',
+      onPress: () => router.push('/(supervisor)/(tabs)/tasks'),
+    },
+    {
+      id: 'scan-qr',
+      icon: 'qr-code',
+      title: 'Scan Site QR',
+      subtitle: 'Join site via QR code',
+      color: '#F59E0B',
+      onPress: () => router.push('/scan-qr'),
+    },
+    {
+      id: 'access',
+      icon: 'shield-checkmark',
+      title: 'Access Control',
+      subtitle: 'Manage permissions',
+      color: '#EF4444',
+      onPress: () => router.push('/(supervisor)/access-control'),
+    },
+    {
+      id: 'face-attendance',
+      icon: 'scan',
+      title: 'Face Recognition',
+      subtitle: 'Mark attendance',
+      color: '#3B82F6',
+      onPress: () => router.push(`/(supervisor)/face-attendance/${siteId}`),
+    },
     {
       id: 'verify',
       icon: 'checkmark-circle',
@@ -114,34 +135,20 @@ export default function SupervisorHomeScreen() {
       },
     },
     {
-      id: 'assign',
-      icon: 'people',
-      title: 'Assign Tasks',
-      subtitle: 'Delegate to labour',
+      id: 'stock',
+      icon: 'cube',
+      title: 'Stock Tracking',
+      subtitle: 'Manage inventory',
       color: '#10B981',
-      onPress: () => {
-        router.push('/(supervisor)/(tabs)/tasks');
-      },
+      onPress: () => router.push(`/(supervisor)/stock/${siteId}`),
     },
     {
-      id: 'approve',
-      icon: 'document-text',
-      title: 'Approve Work',
-      subtitle: 'Site photos & documentation',
-      color: '#3B82F6',
-      onPress: () => {
-        Alert.alert('Coming Soon', 'Work approval feature will be available soon');
-      },
-    },
-    {
-      id: 'access',
-      icon: 'shield-checkmark',
-      title: 'Access Control',
-      subtitle: 'Manage permissions',
-      color: '#EF4444',
-      onPress: () => {
-        Alert.alert('Coming Soon', 'Access control feature will be available soon');
-      },
+      id: 'bills',
+      icon: 'receipt',
+      title: 'GST Billing',
+      subtitle: 'Track expenses',
+      color: '#8B5CF6',
+      onPress: () => router.push(`/(supervisor)/bills/${siteId}`),
     },
   ];
 
@@ -153,76 +160,37 @@ export default function SupervisorHomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.avatar}>
-              {user?.profilePhoto ? (
-                <Image source={{ uri: user.profilePhoto }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarText}>
-                  {user?.name?.charAt(0)?.toUpperCase() || 'S'}
-                </Text>
-              )}
+        <DashboardHeader
+          name={user?.name || 'Supervisor'}
+          role="SUPERVISOR"
+          profilePhoto={user?.profilePhoto}
+        />
+        <DashboardQuickActions title="Quick Actions" actions={actions} />
+        <DashboardDateStrip
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+          numDays={7}
+          offset={3}
+        />
+        <DashboardYourTasks
+          title="Your Tasks"
+          pendingLabel="Pending"
+          showPendingTag={true}
+          pendingCount={pendingAttendance.length}
+        >
+          {loading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={DESIGN.colors.primary} />
+              <Text style={styles.emptyStateText}>Loading…</Text>
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.greeting}>{getGreeting()}</Text>
-              <Text style={styles.userName}>{user?.name || 'Supervisor'}</Text>
-              <Text style={styles.role}>Site Supervisor</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Quick Stats */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Ionicons name="checkmark-circle" size={24} color="#10B981" />
-            <Text style={styles.statValue}>{pendingAttendance.length}</Text>
-            <Text style={styles.statLabel}>Pending</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="people" size={24} color="#3B82F6" />
-            <Text style={styles.statValue}>-</Text>
-            <Text style={styles.statLabel}>Workers</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Ionicons name="clipboard" size={24} color="#F59E0B" />
-            <Text style={styles.statValue}>-</Text>
-            <Text style={styles.statLabel}>Tasks</Text>
-          </View>
-        </View>
-
-        {/* Features Grid */}
-        <View style={styles.featuresContainer}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.featuresGrid}>
-            {features.map((feature) => (
-              <TouchableOpacity
-                key={feature.id}
-                style={[styles.featureCard, { borderLeftColor: feature.color }]}
-                onPress={feature.onPress}
-              >
-                <View style={[styles.featureIcon, { backgroundColor: `${feature.color}15` }]}>
-                  <Ionicons name={feature.icon as any} size={28} color={feature.color} />
-                </View>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureSubtitle}>{feature.subtitle}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.activityContainer}>
-          <Text style={styles.sectionTitle}>Recent Activity</Text>
-          {pendingAttendance.length === 0 ? (
+          ) : pendingAttendance.length === 0 ? (
             <View style={styles.emptyState}>
               <Ionicons name="checkmark-circle-outline" size={48} color="#9CA3AF" />
               <Text style={styles.emptyStateText}>No pending attendance requests</Text>
             </View>
           ) : (
             <View style={styles.activityList}>
-              {pendingAttendance.slice(0, 3).map((attendance: any) => (
+              {pendingAttendance.slice(0, 5).map((attendance: any) => (
                 <TouchableOpacity
                   key={attendance.id}
                   style={styles.activityItem}
@@ -234,7 +202,7 @@ export default function SupervisorHomeScreen() {
                   <View style={styles.activityContent}>
                     <Text style={styles.activityTitle}>Attendance Request</Text>
                     <Text style={styles.activitySubtitle}>
-                      Worker ID: {attendance.userId} • {format(new Date(attendance.date), 'MMM dd, hh:mm a')}
+                      Worker ID: {attendance.userId} • {format(new Date(attendance.date ?? attendance.timestamp), 'MMM dd, hh:mm a')}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
@@ -242,10 +210,9 @@ export default function SupervisorHomeScreen() {
               ))}
             </View>
           )}
-        </View>
+        </DashboardYourTasks>
       </ScrollView>
 
-      {/* Pending Attendance Modal */}
       <Modal
         visible={showPendingAttendanceModal}
         animationType="slide"
@@ -260,7 +227,6 @@ export default function SupervisorHomeScreen() {
                 <Ionicons name="close" size={28} color="#111" />
               </TouchableOpacity>
             </View>
-
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {loading ? (
                 <ActivityIndicator size="large" color={DESIGN.colors.primary} style={styles.loader} />
@@ -280,12 +246,12 @@ export default function SupervisorHomeScreen() {
                         <View style={styles.requestDetails}>
                           <Text style={styles.requestMaterial}>Worker ID: {attendance.userId}</Text>
                           <Text style={styles.requestQuantity}>
-                            {format(new Date(attendance.date), 'MMM dd, hh:mm a')}
+                            {format(new Date(attendance.date ?? attendance.timestamp), 'MMM dd, hh:mm a')}
                           </Text>
                           {attendance.shiftSlot && (
                             <Text style={styles.metaText}>Shift: {attendance.shiftSlot}</Text>
                           )}
-                          {attendance.gpsLat && attendance.gpsLon && (
+                          {attendance.gpsLat != null && attendance.gpsLon != null && (
                             <Text style={styles.metaText}>
                               📍 {parseFloat(attendance.gpsLat).toFixed(4)}, {parseFloat(attendance.gpsLon).toFixed(4)}
                             </Text>
@@ -293,7 +259,6 @@ export default function SupervisorHomeScreen() {
                         </View>
                       </View>
                     </View>
-
                     <View style={styles.approvalActions}>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.rejectButton]}
@@ -329,130 +294,6 @@ const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: DESIGN.spacing.lg,
-    paddingTop: DESIGN.spacing.md,
-    paddingBottom: DESIGN.spacing.lg,
-    backgroundColor: DESIGN.colors.surface,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DESIGN.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: DESIGN.spacing.md,
-  },
-  avatarImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  avatarText: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#fff',
-  },
-  headerText: {
-    flex: 1,
-  },
-  greeting: {
-    fontSize: 14,
-    color: DESIGN.colors.textSecondary,
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginBottom: 2,
-  },
-  role: {
-    fontSize: 12,
-    color: DESIGN.colors.textSecondary,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: DESIGN.spacing.lg,
-    paddingVertical: DESIGN.spacing.md,
-    gap: DESIGN.spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.md,
-    padding: DESIGN.spacing.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginTop: DESIGN.spacing.xs,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: DESIGN.colors.textSecondary,
-    marginTop: DESIGN.spacing.xs,
-  },
-  featuresContainer: {
-    paddingHorizontal: DESIGN.spacing.lg,
-    paddingVertical: DESIGN.spacing.md,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginBottom: DESIGN.spacing.md,
-  },
-  featuresGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: DESIGN.spacing.md,
-  },
-  featureCard: {
-    width: '47%',
-    backgroundColor: DESIGN.colors.surface,
-    borderRadius: DESIGN.radius.md,
-    padding: DESIGN.spacing.md,
-    borderLeftWidth: 4,
-    borderWidth: 1,
-    borderColor: DESIGN.colors.border,
-  },
-  featureIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: DESIGN.spacing.sm,
-  },
-  featureTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: DESIGN.colors.text,
-    marginBottom: 4,
-  },
-  featureSubtitle: {
-    fontSize: 12,
-    color: DESIGN.colors.textSecondary,
-  },
-  activityContainer: {
-    paddingHorizontal: DESIGN.spacing.lg,
-    paddingVertical: DESIGN.spacing.md,
-    paddingBottom: DESIGN.spacing.xl,
-  },
   activityList: {
     gap: DESIGN.spacing.sm,
   },
@@ -464,6 +305,7 @@ const styles = StyleSheet.create({
     padding: DESIGN.spacing.md,
     borderWidth: 1,
     borderColor: DESIGN.colors.border,
+    marginBottom: DESIGN.spacing.sm,
   },
   activityIcon: {
     width: 40,
@@ -480,12 +322,12 @@ const styles = StyleSheet.create({
   activityTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: DESIGN.colors.text,
+    color: DESIGN.colors.text.primary,
     marginBottom: 2,
   },
   activitySubtitle: {
     fontSize: 12,
-    color: DESIGN.colors.textSecondary,
+    color: DESIGN.colors.text.secondary,
   },
   emptyState: {
     alignItems: 'center',
@@ -494,7 +336,7 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: DESIGN.colors.textSecondary,
+    color: DESIGN.colors.text.secondary,
     marginTop: DESIGN.spacing.md,
   },
   modalOverlay: {
@@ -521,7 +363,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: DESIGN.colors.text,
+    color: DESIGN.colors.text.primary,
   },
   modalBody: {
     padding: DESIGN.spacing.lg,
@@ -552,17 +394,17 @@ const styles = StyleSheet.create({
   requestMaterial: {
     fontSize: 14,
     fontWeight: '600',
-    color: DESIGN.colors.text,
+    color: DESIGN.colors.text.primary,
     marginBottom: 4,
   },
   requestQuantity: {
     fontSize: 12,
-    color: DESIGN.colors.textSecondary,
+    color: DESIGN.colors.text.secondary,
     marginBottom: 2,
   },
   metaText: {
     fontSize: 11,
-    color: DESIGN.colors.textSecondary,
+    color: DESIGN.colors.text.secondary,
     marginTop: 2,
   },
   approvalActions: {

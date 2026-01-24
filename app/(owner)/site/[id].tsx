@@ -114,12 +114,16 @@ export default function SiteDashboard() {
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
           {[
-            { icon: 'document-text', label: 'Reports', colors: ['#8B5CF6', '#7C3AED'] },
+            { icon: 'cube', label: 'Stock', colors: ['#10B981', '#059669'], route: `/(owner)/stock/${id}` },
+            { icon: 'receipt', label: 'GST Bills', colors: ['#8B5CF6', '#7C3AED'], route: `/(owner)/bills/${id}` },
             { icon: 'people', label: 'Workers', colors: ['#06B6D4', '#0891B2'] },
-            { icon: 'cube', label: 'Materials', colors: ['#10B981', '#059669'] },
-            { icon: 'calendar', label: 'Schedule', colors: ['#F59E0B', '#D97706'] },
+            { icon: 'document-text', label: 'Reports', colors: ['#F59E0B', '#D97706'] },
           ].map((action, i) => (
-            <TouchableOpacity key={i} style={styles.actionButton}>
+            <TouchableOpacity
+              key={i}
+              style={styles.actionButton}
+              onPress={() => action.route && router.push(action.route)}
+            >
               <LinearGradient colors={action.colors} style={styles.actionGradient}>
                 <Ionicons name={action.icon} size={24} color="#fff" />
               </LinearGradient>
