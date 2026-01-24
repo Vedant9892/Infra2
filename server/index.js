@@ -918,7 +918,7 @@ app.get('/api/sites/my-sites', async (req, res) => {
 app.post('/api/sites/:siteId/documentation', async (req, res) => {
   try {
     const { siteId } = req.params;
-    const { photoUrl, userId } = req.body || {};
+    const { photoUrl, userId, comment } = req.body || {};
     
     if (!siteId || !photoUrl || !userId) {
       return res.status(400).json({ error: 'Missing siteId, photoUrl, or userId' });
@@ -930,11 +930,12 @@ app.post('/api/sites/:siteId/documentation', async (req, res) => {
       siteId: new ObjectId(siteId),
       userId: new ObjectId(userId),
       photoUrl,
+      comment: comment || '',
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    return res.status(201).json({ success: true, message: 'Work photo uploaded' });
+    return res.status(201).json({ success: true, message: 'Work photo uploaded with comment' });
   } catch (err) {
     console.error('Documentation upload error:', err);
     return res.status(400).json({ error: err.message || 'Upload failed' });

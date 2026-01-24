@@ -119,8 +119,8 @@ export function getSiteById(siteId: string): SiteMock | undefined {
 // Site documentation (work photos)
 // –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––
 
-export function getWorkPhotos(siteId: string): { id: string; photoUrl: string; timestamp: string; userId?: string }[] {
-  return mockData.workPhotos().filter((p) => p.siteId === siteId).map((p) => ({ id: p.id, photoUrl: p.photoUrl, timestamp: p.timestamp, userId: p.userId }));
+export function getWorkPhotos(siteId: string): { id: string; photoUrl: string; timestamp: string; userId?: string; comment?: string }[] {
+  return mockData.workPhotos().filter((p) => p.siteId === siteId).map((p) => ({ id: p.id, photoUrl: p.photoUrl, timestamp: p.timestamp, userId: p.userId, comment: p.comment }));
 }
 
 export function approveWorkPhoto(photoId: string, approved: boolean): void {
@@ -135,8 +135,8 @@ export function approveWorkLog(logId: string, approved: boolean): void {
   triggerRefresh();
 }
 
-export function addWorkPhoto(siteId: string, userId: string, photoUrl: string): void {
-  const next = { id: `wp-${Date.now()}`, siteId, userId, photoUrl, timestamp: new Date().toISOString() };
+export function addWorkPhoto(siteId: string, userId: string, photoUrl: string, comment?: string): void {
+  const next = { id: `wp-${Date.now()}`, siteId, userId, photoUrl, timestamp: new Date().toISOString(), comment };
   mockData.setWorkPhotos([...mockData.workPhotos(), next]);
   triggerRefresh();
 }

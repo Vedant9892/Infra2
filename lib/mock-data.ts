@@ -160,7 +160,7 @@ export type SiteMock = {
   enrollmentCode?: string;
 };
 
-export type WorkPhotoMock = { id: string; siteId: string; userId: string; photoUrl: string; timestamp: string };
+export type WorkPhotoMock = { id: string; siteId: string; userId: string; photoUrl: string; timestamp: string; comment?: string };
 
 // Realistic worker names
 const WORKERS = ['Ramesh Kumar', 'Suresh Patel', 'Amit Sharma', 'Vikram Singh', 'Rajesh Yadav', 'Mohan Das', 'Kiran Reddy', 'Suresh Nair'];
