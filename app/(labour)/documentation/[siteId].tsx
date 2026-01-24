@@ -56,7 +56,9 @@ export default function LabourDocumentationScreen() {
     setUploading(true);
     try {
       const uid = user?.id ?? 'u1';
-      addWorkPhoto(siteId, uid, 'mock://work-photo');
+      // Use empty string instead of mock:// URL to avoid React Native URL handler errors
+      // In production, this would be a real photo URI from ImagePicker
+      addWorkPhoto(siteId, uid, '');
       load();
       forceUpdate((n) => n + 1);
       Alert.alert('Success', 'Work photo added successfully');

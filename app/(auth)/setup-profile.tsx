@@ -19,13 +19,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../../constants/api';
 import { supabase } from '../../constants/supabase';
 import { DESIGN } from '../../constants/designSystem';
+import { useInputValue } from '../../lib/use-form-storage';
 
 export default function SetupProfile() {
   const router = useRouter();
   const { userId, phoneNumber, role } = useLocalSearchParams<{ userId: string; phoneNumber?: string; role?: string }>();
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [name, setName, clearName] = useInputValue('setup-profile', 'name', '');
+  const [email, setEmail, clearEmail] = useInputValue('setup-profile', 'email', '');
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profileImageBase64, setProfileImageBase64] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -165,7 +166,11 @@ export default function SetupProfile() {
             [
               {
                 text: 'Continue',
-                onPress: () => router.replace(dashboardPath),
+                onPress: async () => {
+                  await clearName();
+                  await clearEmail();
+                  router.replace(dashboardPath);
+                },
               },
             ],
             { cancelable: false }

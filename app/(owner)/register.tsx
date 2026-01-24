@@ -12,11 +12,12 @@ import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../../contexts/UserContext';
+import { useFormStorage } from '../../lib/use-form-storage';
 
 export default function OwnerRegistration() {
   const router = useRouter();
   const { user, setUser } = useUser();
-  const [formData, setFormData] = useState({
+  const [formData, setFormDataField, clearForm] = useFormStorage('owner-register', {
     companyName: '',
     ownerName: '',
     email: '',
@@ -45,7 +46,10 @@ export default function OwnerRegistration() {
     Alert.alert('Success', 'Owner registration completed successfully!', [
       {
         text: 'OK',
-        onPress: () => router.replace('/(owner)/sites'),
+        onPress: async () => {
+          await clearForm(); // Clear stored inputs after successful registration
+          router.replace('/(owner)/sites');
+        },
       },
     ]);
   };
@@ -71,7 +75,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.companyName}
-              onChangeText={(text) => setFormData({ ...formData, companyName: text })}
+              onChangeText={(text) => setFormDataField('companyName', text)}
               placeholder="Enter company name"
               placeholderTextColor="#9CA3AF"
             />
@@ -82,7 +86,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.ownerName}
-              onChangeText={(text) => setFormData({ ...formData, ownerName: text })}
+              onChangeText={(text) => setFormDataField('ownerName', text)}
               placeholder="Enter your full name"
               placeholderTextColor="#9CA3AF"
             />
@@ -93,7 +97,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.email}
-              onChangeText={(text) => setFormData({ ...formData, email: text })}
+              onChangeText={(text) => setFormDataField('email', text)}
               placeholder="email@example.com"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -108,7 +112,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.gstNumber}
-              onChangeText={(text) => setFormData({ ...formData, gstNumber: text })}
+              onChangeText={(text) => setFormDataField('gstNumber', text)}
               placeholder="22AAAAA0000A1Z5"
               autoCapitalize="characters"
               placeholderTextColor="#9CA3AF"
@@ -120,7 +124,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.panNumber}
-              onChangeText={(text) => setFormData({ ...formData, panNumber: text })}
+              onChangeText={(text) => setFormDataField('panNumber', text)}
               placeholder="ABCDE1234F"
               autoCapitalize="characters"
               maxLength={10}
@@ -135,7 +139,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={[styles.input, styles.textArea]}
               value={formData.address}
-              onChangeText={(text) => setFormData({ ...formData, address: text })}
+              onChangeText={(text) => setFormDataField('address', text)}
               placeholder="Enter full address"
               multiline
               numberOfLines={3}
@@ -149,7 +153,7 @@ export default function OwnerRegistration() {
               <TextInput
                 style={styles.input}
                 value={formData.city}
-                onChangeText={(text) => setFormData({ ...formData, city: text })}
+                onChangeText={(text) => setFormDataField('city', text)}
                 placeholder="City"
                 placeholderTextColor="#9CA3AF"
               />
@@ -160,7 +164,7 @@ export default function OwnerRegistration() {
               <TextInput
                 style={styles.input}
                 value={formData.state}
-                onChangeText={(text) => setFormData({ ...formData, state: text })}
+                onChangeText={(text) => setFormDataField('state', text)}
                 placeholder="State"
                 placeholderTextColor="#9CA3AF"
               />
@@ -172,7 +176,7 @@ export default function OwnerRegistration() {
             <TextInput
               style={styles.input}
               value={formData.pincode}
-              onChangeText={(text) => setFormData({ ...formData, pincode: text })}
+              onChangeText={(text) => setFormDataField('pincode', text)}
               placeholder="400001"
               keyboardType="numeric"
               maxLength={6}

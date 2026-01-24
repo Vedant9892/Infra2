@@ -1,42 +1,115 @@
-/** Petty Cash Wallet with Geotags – Desirable. Frontend-only, mock. */
-import React, { useState, useCallback } from 'react';
+/** Petty Cash Wallet with Geotags – Full implementation with real API */
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet, Alert, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { DESIGN } from '../../constants/designSystem';
 import { useUser } from '../../contexts/UserContext';
-import { getPettyCash, addPettyCash } from '../../lib/mock-api';
+import { pettyCashApi } from '../../lib/feature-api';
+import { useInputValue } from '../../lib/use-form-storage';
 
 export default function PettyCashScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [refreshing, setRefreshing] = useState(false);
-  const [amount, setAmount] = useState('');
-  const [purpose, setPurpose] = useState('');
+  const [amount, setAmount] = useInputValue('petty-cash', 'amount', '');
+  const [purpose, setPurpose] = useInputValue('petty-cash', 'purpose', '');
   const [showForm, setShowForm] = useState(false);
-  const [, forceUpdate] = useState(0);
-  const list = getPettyCash(user?.id);
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [gettingLocation, setGettingLocation] = useState(false);
 
-  const onRefresh = useCallback(() => {
+  const loadPettyCash = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await pettyCashApi.getAll(user?.id ? Number(user.id) : undefined);
+      setList(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('Error loading petty cash:', error);
+      Alert.alert('Error', error.message || 'Failed to load expenses');
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadPettyCash();
+  }, [loadPettyCash]);
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    setTimeout(() => { setRefreshing(false); forceUpdate((n) => n + 1); }, 400);
-  }, []);
+    await loadPettyCash();
+    setRefreshing(false);
+  }, [loadPettyCash]);
 
-  const submit = () => {
+  const getCurrentLocation = async () => {
+    try {
+      setGettingLocation(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required for GPS validation');
+        return null;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      
+      // Reverse geocode to get address
+      const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const addressString = `${address?.street || ''} ${address?.city || ''} ${address?.region || ''}`.trim() || 'Current Location';
+
+      return {
+        lat: latitude.toString(),
+        lon: longitude.toString(),
+        address: addressString,
+      };
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert('Error', 'Failed to get GPS location');
+      return null;
+    } finally {
+      setGettingLocation(false);
+    }
+  };
+
+  const submit = async () => {
     const a = parseFloat(amount);
     const p = purpose.trim();
     if (isNaN(a) || a <= 0 || !p) {
       Alert.alert('Error', 'Valid amount and purpose required');
       return;
     }
-    addPettyCash(user?.id ?? 'u1', a, p, null, 19.076, 72.8777, 'Andheri West (mock GPS)');
-    setAmount('');
-    setPurpose('');
-    setShowForm(false);
-    forceUpdate((n) => n + 1);
-    Alert.alert('Submitted', 'Receipt queued with geotag (mock).');
+
+    // Get GPS location (required for validation)
+    const location = await getCurrentLocation();
+    if (!location) {
+      Alert.alert('Error', 'GPS location is required for expense validation');
+      return;
+    }
+
+    try {
+      await pettyCashApi.create({
+        userId: user?.id ? Number(user.id) : 1,
+        amount: a.toString(),
+        purpose: p,
+        receiptUri: null,
+        gpsLat: location.lat,
+        gpsLon: location.lon,
+        address: location.address,
+      });
+
+      setAmount('');
+      setPurpose('');
+      setShowForm(false);
+      await loadPettyCash();
+      Alert.alert('Submitted', 'Expense submitted with GPS validation');
+      // Note: Inputs are automatically cleared by the hook when set to empty
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to submit expense');
+    }
   };
 
   const statusColor = (s: string) => (s === 'approved' ? DESIGN.colors.success : s === 'rejected' ? DESIGN.colors.danger : DESIGN.colors.warning);
@@ -83,8 +156,14 @@ export default function PettyCashScreen() {
                 <TouchableOpacity style={[styles.btn, styles.btnSecondary]} onPress={() => setShowForm(false)}>
                   <Text style={styles.btnTextSecondary}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={submit}>
-                  <Text style={styles.btnText}>Submit</Text>
+                <TouchableOpacity 
+                  style={[styles.btn, styles.btnPrimary, gettingLocation && styles.btnDisabled]} 
+                  onPress={submit}
+                  disabled={gettingLocation}
+                >
+                  <Text style={styles.btnText}>
+                    {gettingLocation ? 'Getting location...' : 'Submit'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -92,7 +171,9 @@ export default function PettyCashScreen() {
         </View>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>My expenses</Text>
-          {list.length === 0 ? (
+          {loading ? (
+            <Text style={styles.empty}>Loading expenses...</Text>
+          ) : list.length === 0 ? (
             <Text style={styles.empty}>No expenses yet.</Text>
           ) : (
             list.map((e) => (
@@ -163,4 +244,5 @@ const styles = StyleSheet.create({
   purpose: { fontSize: 13, color: DESIGN.colors.text.secondary, marginTop: 4 },
   meta: { fontSize: 11, color: DESIGN.colors.text.tertiary, marginTop: 4 },
   empty: { fontSize: 14, color: DESIGN.colors.text.secondary },
+  btnDisabled: { opacity: 0.5 },
 });

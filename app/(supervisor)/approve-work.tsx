@@ -245,7 +245,10 @@ export default function ApproveWorkScreen() {
                   </Text>
                 </View>
               </View>
-              {submission.type === 'photo' && submission.photoUrl && (
+              {submission.type === 'photo' && 
+               submission.photoUrl && 
+               submission.photoUrl !== '' && 
+               !submission.photoUrl.startsWith('mock://') && (
                 <Image source={{ uri: submission.photoUrl }} style={styles.cardImage} resizeMode="cover" />
               )}
               {submission.type === 'work_log' && (

@@ -6,6 +6,12 @@ import { z } from "zod";
 import { registerAttendanceRoutes } from "./attendance-routes";
 import { registerTaskRoutes } from "./task-routes";
 import { registerSitesRoutes } from "./sites-routes";
+import { registerContractorRoutes } from "./contractor-routes";
+import { registerFaceRecallRoutes } from "./face-recall-routes";
+import { registerToolRoutes } from "./tool-routes";
+import { registerPermitRoutes } from "./permit-routes";
+import { registerPettyCashRoutes } from "./petty-cash-routes";
+import { registerConsumptionVarianceRoutes } from "./consumption-variance-routes";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -113,6 +119,14 @@ export async function registerRoutes(
 
   // Register sites routes (Owner site management)
   registerSitesRoutes(app);
+
+  // Register new feature routes
+  registerContractorRoutes(app);
+  registerFaceRecallRoutes(app);
+  registerToolRoutes(app);
+  registerPermitRoutes(app);
+  registerPettyCashRoutes(app);
+  registerConsumptionVarianceRoutes(app);
 
   return httpServer;
 }

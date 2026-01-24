@@ -515,7 +515,9 @@ export default function HomeScreen() {
       const lat = currentLocation?.coords.latitude ?? 19.076;
       const lon = currentLocation?.coords.longitude ?? 72.8777;
       const addr = locationAddress || 'Andheri West, Mumbai';
-      const photo = capturedPhoto || 'mock://photo';
+      // Use empty string instead of mock:// URL to avoid React Native URL handler errors
+      // In production, capturedPhoto should always be set from ImagePicker
+      const photo = capturedPhoto || '';
 
       markAttendance(uid, photo, lat, lon, addr, siteIdForApi);
 
@@ -1623,7 +1625,9 @@ export default function HomeScreen() {
                   <View key={attendance.id} style={styles.requestCard}>
                     <View style={styles.requestHeader}>
                       <View style={styles.requestInfo}>
-                        {attendance.photoUri && (
+                        {attendance.photoUri && 
+                         attendance.photoUri !== '' && 
+                         !attendance.photoUri.startsWith('mock://') && (
                           <Image source={{ uri: attendance.photoUri }} style={styles.attendancePhoto} />
                         )}
                         <View style={styles.requestDetails}>
@@ -1682,7 +1686,15 @@ export default function HomeScreen() {
                   .filter(r => format(r.timestamp, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd'))
                   .map((record) => (
                     <View key={record.id} style={styles.recordCard}>
-                      <Image source={{ uri: record.photoUri }} style={styles.recordPhoto} />
+                      {record.photoUri && 
+                       record.photoUri !== '' && 
+                       !record.photoUri.startsWith('mock://') ? (
+                        <Image source={{ uri: record.photoUri }} style={styles.recordPhoto} />
+                      ) : (
+                        <View style={[styles.recordPhoto, { backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' }]}>
+                          <Ionicons name="image-outline" size={32} color="#9CA3AF" />
+                        </View>
+                      )}
                       <View style={styles.recordDetails}>
                         <Text style={styles.recordUser}>{record.userId}</Text>
                         <Text style={styles.recordTime}>{format(record.timestamp, 'hh:mm a')}</Text>

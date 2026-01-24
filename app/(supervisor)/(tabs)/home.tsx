@@ -240,7 +240,9 @@ export default function SupervisorHomeScreen() {
                   <View key={attendance.id} style={styles.requestCard}>
                     <View style={styles.requestHeader}>
                       <View style={styles.requestInfo}>
-                        {attendance.photoUri && (
+                        {attendance.photoUri && 
+                         attendance.photoUri !== '' && 
+                         !attendance.photoUri.startsWith('mock://') && (
                           <Image source={{ uri: attendance.photoUri }} style={styles.attendancePhoto} />
                         )}
                         <View style={styles.requestDetails}>

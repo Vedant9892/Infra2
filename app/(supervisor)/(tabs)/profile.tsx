@@ -134,7 +134,9 @@ export default function SupervisorProfileScreen() {
 
         <View style={styles.content}>
           <TouchableOpacity style={styles.avatarContainer} onPress={pickPhoto}>
-            {photoUri ? (
+            {photoUri && 
+             photoUri !== '' && 
+             !photoUri.startsWith('mock://') ? (
               <Image source={{ uri: photoUri }} style={styles.avatar} />
             ) : (
               <View style={styles.avatarPlaceholder}>

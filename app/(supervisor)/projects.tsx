@@ -325,7 +325,10 @@ export default function SupervisorProjectsScreen() {
                         </Text>
                       </View>
                     </View>
-                    {report.type === 'photo' && report.photoUrl && (
+                    {report.type === 'photo' && 
+                     report.photoUrl && 
+                     report.photoUrl !== '' && 
+                     !report.photoUrl.startsWith('mock://') && (
                       <Image source={{ uri: report.photoUrl }} style={styles.reportImage} resizeMode="cover" />
                     )}
                     {report.type === 'work_log' && (

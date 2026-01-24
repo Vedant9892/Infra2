@@ -30,10 +30,12 @@ type Site = {
   budget: string;
 };
 
+import { useFormStorage } from '../../lib/use-form-storage';
+
 export default function SiteRegistration() {
   const router = useRouter();
   const [step, setStep] = useState(1);
-  const [siteData, setSiteData] = useState({
+  const [siteData, setSiteDataField, clearSiteForm] = useFormStorage('site-registration', {
     name: '',
     location: '',
     address: '',
@@ -112,7 +114,10 @@ export default function SiteRegistration() {
       [
         {
           text: 'OK',
-          onPress: () => router.replace('/(owner)/sites'),
+          onPress: async () => {
+            await clearSiteForm(); // Clear stored inputs after successful registration
+            router.replace('/(owner)/sites');
+          },
         },
       ]
     );
@@ -155,7 +160,7 @@ export default function SiteRegistration() {
               <TextInput
                 style={styles.input}
                 value={siteData.name}
-                onChangeText={(text) => setSiteData({ ...siteData, name: text })}
+                onChangeText={(text) => setSiteDataField('name', text)}
                 placeholder="e.g., Mumbai Residential Complex"
                 placeholderTextColor="#9CA3AF"
               />
@@ -166,7 +171,7 @@ export default function SiteRegistration() {
               <TextInput
                 style={styles.input}
                 value={siteData.location}
-                onChangeText={(text) => setSiteData({ ...siteData, location: text })}
+                onChangeText={(text) => setSiteDataField('location', text)}
                 placeholder="e.g., Andheri West, Mumbai"
                 placeholderTextColor="#9CA3AF"
               />
@@ -177,7 +182,7 @@ export default function SiteRegistration() {
               <TextInput
                 style={[styles.input, styles.textArea]}
                 value={siteData.address}
-                onChangeText={(text) => setSiteData({ ...siteData, address: text })}
+                onChangeText={(text) => setSiteDataField('address', text)}
                 placeholder="Enter complete site address"
                 multiline
                 numberOfLines={3}
@@ -190,7 +195,7 @@ export default function SiteRegistration() {
               <TextInput
                 style={styles.input}
                 value={siteData.pincode}
-                onChangeText={(text) => setSiteData({ ...siteData, pincode: text })}
+                onChangeText={(text) => setSiteDataField('pincode', text)}
                 placeholder="400001"
                 keyboardType="numeric"
                 maxLength={6}
@@ -208,7 +213,7 @@ export default function SiteRegistration() {
                       styles.radioButton,
                       siteData.projectType === type && styles.radioButtonActive,
                     ]}
-                    onPress={() => setSiteData({ ...siteData, projectType: type })}
+                    onPress={() => setSiteDataField('projectType', type)}
                   >
                     <Text
                       style={[
@@ -228,7 +233,7 @@ export default function SiteRegistration() {
               <TextInput
                 style={styles.input}
                 value={siteData.budget}
-                onChangeText={(text) => setSiteData({ ...siteData, budget: text })}
+                onChangeText={(text) => setSiteDataField('budget', text)}
                 placeholder="e.g., ₹50,00,000"
                 keyboardType="numeric"
                 placeholderTextColor="#9CA3AF"

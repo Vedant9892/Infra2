@@ -1,22 +1,41 @@
-/** Contractor Rating & Management – Desirable. Frontend-only, mock. */
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+/** Contractor Rating & Management – Full implementation with real API */
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { DESIGN } from '../../constants/designSystem';
-import { getContractors } from '../../lib/mock-api';
+import { contractorApi } from '../../lib/feature-api';
 
 export default function ContractorsScreen() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const list = getContractors();
+  const [list, setList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 400);
+  const loadContractors = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await contractorApi.getAll();
+      setList(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      console.error('Error loading contractors:', error);
+      Alert.alert('Error', error.message || 'Failed to load contractors');
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadContractors();
+  }, [loadContractors]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadContractors();
+    setRefreshing(false);
+  }, [loadContractors]);
 
   const paymentColor = (p: string) => (p === 'release' ? DESIGN.colors.success : p === 'hold' ? DESIGN.colors.danger : DESIGN.colors.warning);
 
@@ -36,7 +55,12 @@ export default function ContractorsScreen() {
       >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1–10 rating, payment advice</Text>
-          {list.map((c) => (
+          {loading ? (
+            <Text style={styles.empty}>Loading contractors...</Text>
+          ) : list.length === 0 ? (
+            <Text style={styles.empty}>No contractors found</Text>
+          ) : (
+            list.map((c) => (
             <View key={c.id} style={styles.card}>
               <View style={styles.row}>
                 <Text style={styles.name}>{c.name}</Text>
@@ -53,7 +77,8 @@ export default function ContractorsScreen() {
                 <Text style={[styles.adviceText, { color: paymentColor(c.paymentAdvice) }]}>Payment: {c.paymentAdvice}</Text>
               </View>
             </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -93,4 +118,5 @@ const styles = StyleSheet.create({
   stat: { fontSize: 12, color: DESIGN.colors.text.secondary },
   advice: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   adviceText: { fontSize: 12, fontWeight: '600' },
+  empty: { fontSize: 14, color: DESIGN.colors.text.secondary, textAlign: 'center', marginTop: 20 },
 });

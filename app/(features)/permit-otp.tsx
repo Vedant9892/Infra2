@@ -9,12 +9,13 @@ import { DESIGN } from '../../constants/designSystem';
 import { useUser } from '../../contexts/UserContext';
 import { getPermits, requestPermit, verifyPermitOTP } from '../../lib/mock-api';
 import { OTPInput } from '../../components/OTPInput';
+import { useInputValue } from '../../lib/use-form-storage';
 
 export default function PermitOTPScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [refreshing, setRefreshing] = useState(false);
-  const [taskName, setTaskName] = useState('');
+  const [taskName, setTaskName] = useInputValue('permit-otp', 'taskName', '');
   const [verifyId, setVerifyId] = useState<string | null>(null);
   const [otp, setOtp] = useState('');
   const [, forceUpdate] = useState(0);
