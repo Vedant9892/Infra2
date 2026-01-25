@@ -56,10 +56,15 @@ export default function CreateSiteWizard() {
         
         // Radius validation removed - use default if not set
 
+        if (!user?.id) {
+            Alert.alert('Error', 'User not authenticated. Please login again.');
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
-                ownerId: user?.id,
+                ownerId: user.id, // Associate site with current owner
                 name: formData.name,
                 description: formData.description,
                 address: formData.address,

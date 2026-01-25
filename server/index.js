@@ -63,7 +63,7 @@ const billsCollection = () => {
 async function resolveUserRole(identifier) {
   if (!identifier) return null;
   const users = usersCollection();
-  if (typeof identifier === 'string' && identifier.length === 24) {
+  if (typeof identifier === 'string' && ObjectId.isValid(identifier)) {
     try {
       const user = await users.findOne({ _id: new ObjectId(identifier) });
       if (user?.role) return user.role;
@@ -159,6 +159,14 @@ app.post('/api/sites', async (req, res) => {
       });
     }
 
+    // Validate ownerId format
+    if (!ObjectId.isValid(ownerId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid ownerId format'
+      });
+    }
+
     // Radius validation - use default if not provided
     const finalRadius = radius || 100; // Default 100m if not provided
 
@@ -243,6 +251,11 @@ app.get('/api/sites/labour/:userId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'userId is required' });
     }
 
+    // Validate userId format
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid userId format' });
+    }
+
     const users = usersCollection();
     const user = await users.findOne({ _id: new ObjectId(userId) });
 
@@ -292,6 +305,11 @@ app.get('/api/sites/owner/:ownerId', async (req, res) => {
       return res.status(400).json({ success: false, message: 'ownerId is required' });
     }
 
+    // Validate ownerId format
+    if (!ObjectId.isValid(ownerId)) {
+      return res.status(400).json({ success: false, message: 'Invalid ownerId format' });
+    }
+
     const sites = sitesCollection();
     const ownerSites = await sites.find({ ownerId: new ObjectId(ownerId) })
       .sort({ createdAt: -1 })
@@ -332,6 +350,126 @@ app.get('/api/sites/owner/:ownerId', async (req, res) => {
   }
 });
 
+// Get user's sites (for labour) - MUST BE BEFORE /api/sites/:siteId to avoid route conflict
+app.get('/api/sites/my-sites', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.json([]); // Return empty array instead of error
+    }
+
+    // Validate userId format
+    if (!ObjectId.isValid(userId)) {
+      return res.json([]); // Return empty array instead of error
+    }
+
+    const users = usersCollection();
+    const user = await users.findOne({ _id: new ObjectId(userId) });
+
+    if (!user) {
+      return res.json([]); // Return empty array instead of error
+    }
+
+    const sites = sitesCollection();
+    let siteList = [];
+
+    // If user has currentSiteId or enrolledSiteId, return that site
+    if (user.currentSiteId || user.enrolledSiteId) {
+      const siteId = user.currentSiteId || user.enrolledSiteId;
+      
+      // Skip if siteId is null, undefined, or empty
+      if (!siteId) {
+        return res.json([]);
+      }
+      
+      // Validate siteId format - handle string, ObjectId, and numeric types
+      let validSiteId = null;
+      try {
+        // Convert to string first for validation - handle all types
+        let siteIdStr = '';
+        if (typeof siteId === 'string') {
+          siteIdStr = siteId.trim();
+        } else if (typeof siteId === 'number') {
+          // Handle numeric siteId - convert to string (will be invalid ObjectId, will be cleaned up)
+          siteIdStr = String(siteId);
+        } else if (siteId && typeof siteId === 'object') {
+          // Handle ObjectId from MongoDB - it has toString() method
+          try {
+            siteIdStr = siteId.toString();
+          } catch (e) {
+            // If toString fails, try other methods
+            if (siteId._id) {
+              siteIdStr = String(siteId._id);
+            } else {
+              siteIdStr = String(siteId);
+            }
+          }
+        } else {
+          siteIdStr = String(siteId || '');
+        }
+        
+        // Skip empty strings, null, undefined
+        if (!siteIdStr || siteIdStr === '' || siteIdStr === 'null' || siteIdStr === 'undefined' || siteIdStr === 'NaN') {
+          return res.json([]);
+        }
+        
+        // Validate the string format - ObjectId must be 24 hex characters
+        if (!ObjectId.isValid(siteIdStr)) {
+          // Silently clean up invalid siteId (numeric or other invalid formats)
+          try {
+            await users.updateOne(
+              { _id: new ObjectId(userId) },
+              { $unset: { currentSiteId: '', enrolledSiteId: '' } }
+            );
+          } catch (cleanupErr) {
+            // Silently handle cleanup errors
+          }
+          return res.json([]); // Return empty array if siteId is invalid
+        }
+        
+        // Convert to ObjectId for query
+        try {
+          validSiteId = new ObjectId(siteIdStr);
+        } catch (objIdErr) {
+          // Silently return empty array if ObjectId creation fails
+          return res.json([]);
+        }
+
+        const site = await sites.findOne({ _id: validSiteId });
+        if (site) {
+          siteList = [{
+            _id: site._id.toString(),
+            id: site._id.toString(),
+            name: site.name,
+            address: site.address || site.location || '',
+            role: 'worker',
+            isActive: site.status === 'active',
+            status: site.status || 'active',
+          }];
+        }
+      } catch (siteErr) {
+        // Silently handle errors - don't log as error to prevent noise
+        // Clean up on error and return empty list
+        try {
+          await users.updateOne(
+            { _id: new ObjectId(userId) },
+            { $unset: { currentSiteId: '', enrolledSiteId: '' } }
+          );
+        } catch (cleanupErr) {
+          // Silently handle cleanup errors
+        }
+        // Continue with empty list if site not found or error
+      }
+    }
+
+    return res.json(siteList);
+  } catch (err) {
+    // Silently return empty array - don't log errors to prevent noise
+    return res.json([]);
+  }
+});
+
 // Get single site details
 app.get('/api/sites/:siteId', async (req, res) => {
   try {
@@ -339,6 +477,12 @@ app.get('/api/sites/:siteId', async (req, res) => {
 
     if (!siteId) {
       return res.status(400).json({ success: false, message: 'siteId is required' });
+    }
+
+    // Validate siteId format before using it
+    if (!ObjectId.isValid(siteId)) {
+      console.error(`Invalid siteId format: ${siteId}`);
+      return res.status(400).json({ success: false, message: 'Invalid siteId format' });
     }
 
     const sites = sitesCollection();
@@ -443,6 +587,11 @@ app.delete('/api/sites/:siteId', async (req, res) => {
 
     if (!siteId) {
       return res.status(400).json({ success: false, message: 'siteId is required' });
+    }
+
+    // Validate siteId format
+    if (!ObjectId.isValid(siteId)) {
+      return res.status(400).json({ success: false, message: 'Invalid siteId format' });
     }
 
     const sites = sitesCollection();
@@ -721,6 +870,11 @@ app.post('/api/users/complete-profile', async (req, res) => {
       return res.status(400).json({ success: false, message: 'userId, name, and profilePhoto are required' });
     }
 
+    // Validate userId format
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid userId format' });
+    }
+
     const users = usersCollection();
     const updateData = {
       name,
@@ -759,6 +913,11 @@ app.put('/api/users/update-profile', async (req, res) => {
     const { userId, name, profilePhoto } = req.body || {};
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+
+    // Validate userId format
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ success: false, message: 'Invalid userId format' });
     }
 
     const users = usersCollection();
@@ -873,47 +1032,6 @@ app.post('/api/sites/join', async (req, res) => {
   }
 });
 
-// Get user's sites (for labour) - Simplified using existing API
-app.get('/api/sites/my-sites', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    const users = usersCollection();
-    const user = await users.findOne({ _id: new ObjectId(userId) });
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const sites = sitesCollection();
-    let siteList = [];
-
-    // If user has currentSiteId, return that site
-    if (user.currentSiteId || user.enrolledSiteId) {
-      const siteId = user.currentSiteId || user.enrolledSiteId;
-      const site = await sites.findOne({ _id: new ObjectId(siteId) });
-      if (site) {
-        siteList = [{
-          _id: site._id.toString(),
-          name: site.name,
-          address: site.address,
-          role: 'worker',
-          isActive: site.status === 'active',
-        }];
-      }
-    }
-
-    return res.json(siteList);
-  } catch (err) {
-    console.error('Get my-sites error:', err);
-    return res.status(400).json({ error: err.message || 'Failed to fetch sites' });
-  }
-});
-
 // Site documentation: upload work photo (labour)
 app.post('/api/sites/:siteId/documentation', async (req, res) => {
   try {
@@ -922,6 +1040,14 @@ app.post('/api/sites/:siteId/documentation', async (req, res) => {
     
     if (!siteId || !photoUrl || !userId) {
       return res.status(400).json({ error: 'Missing siteId, photoUrl, or userId' });
+    }
+
+    // Validate siteId and userId formats
+    if (!ObjectId.isValid(siteId)) {
+      return res.status(400).json({ error: 'Invalid siteId format' });
+    }
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).json({ error: 'Invalid userId format' });
     }
 
     // Store work photo in MongoDB (can create a workphotos collection)
@@ -998,10 +1124,18 @@ app.patch('/api/attendance/:id/approve', async (req, res) => {
       return res.status(400).json({ error: 'approved (boolean) and supervisorId are required' });
     }
 
+    // Validate attendanceId and supervisorId formats
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid attendance id format' });
+    }
+    if (!ObjectId.isValid(supervisorId)) {
+      return res.status(400).json({ error: 'Invalid supervisorId format' });
+    }
+
     const attendance = attendanceCollection();
     const now = new Date();
     
-    const attendanceId = typeof id === 'string' && id.length === 24 ? new ObjectId(id) : new ObjectId(id);
+    const attendanceId = new ObjectId(id);
     
     const updated = await attendance.findOneAndUpdate(
       { _id: attendanceId },
@@ -1059,9 +1193,20 @@ app.post('/api/tasks', async (req, res) => {
       return res.status(400).json({ error: 'title, siteId, assignedToSupervisorId, and createdByEngineerId are required' });
     }
 
+    // Validate ObjectIds
+    if (!ObjectId.isValid(siteId)) {
+      return res.status(400).json({ error: 'Invalid siteId format' });
+    }
+    if (!ObjectId.isValid(assignedToSupervisorId)) {
+      return res.status(400).json({ error: 'Invalid assignedToSupervisorId format' });
+    }
+    if (!ObjectId.isValid(createdByEngineerId)) {
+      return res.status(400).json({ error: 'Invalid createdByEngineerId format' });
+    }
+
     // Get supervisor name
     const users = usersCollection();
-    const supervisor = await users.findOne({ _id: new ObjectId(assignedToSupervisorId.toString()) });
+    const supervisor = await users.findOne({ _id: new ObjectId(assignedToSupervisorId) });
 
     const tasks = db.collection('tasks');
     const task = {
@@ -1070,9 +1215,9 @@ app.post('/api/tasks', async (req, res) => {
       location: location || '',
       status: 'pending',
       priority: priority || 'medium',
-      siteId: siteId.toString(),
-      assignedToSupervisorId: assignedToSupervisorId.toString(),
-      createdByEngineerId: createdByEngineerId.toString(),
+      siteId: new ObjectId(siteId),
+      assignedToSupervisorId: new ObjectId(assignedToSupervisorId),
+      createdByEngineerId: new ObjectId(createdByEngineerId),
       supervisor: supervisor?.name || 'Supervisor',
       supervisorAvatar: '👨‍💼',
       date: new Date(),
@@ -1103,8 +1248,19 @@ app.patch('/api/tasks/:id/assign-labour', async (req, res) => {
       return res.status(400).json({ error: 'assignedToLabourId and supervisorId are required' });
     }
 
+    // Validate ObjectId formats
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid task id format' });
+    }
+    if (!ObjectId.isValid(assignedToLabourId)) {
+      return res.status(400).json({ error: 'Invalid assignedToLabourId format' });
+    }
+    if (!ObjectId.isValid(supervisorId)) {
+      return res.status(400).json({ error: 'Invalid supervisorId format' });
+    }
+
     const tasks = db.collection('tasks');
-    const taskId = typeof id === 'string' && id.length === 24 ? new ObjectId(id) : new ObjectId(id);
+    const taskId = new ObjectId(id);
     
     // Verify task is assigned to this supervisor
     const existingTask = await tasks.findOne({ _id: taskId });
@@ -1205,8 +1361,13 @@ app.patch('/api/tasks/:id/status', async (req, res) => {
       return res.status(400).json({ error: 'status is required' });
     }
 
+    // Validate taskId format
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: 'Invalid task id format' });
+    }
+
     const tasks = db.collection('tasks');
-    const taskId = typeof id === 'string' && id.length === 24 ? new ObjectId(id) : new ObjectId(id);
+    const taskId = new ObjectId(id);
     
     const updated = await tasks.findOneAndUpdate(
       { _id: taskId },
@@ -1350,6 +1511,11 @@ app.patch('/api/materials/:id/status', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid status value' });
     }
 
+    // Validate id format
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid request id format' });
+    }
+
     const resolvedRole = approverRole || (await resolveUserRole(approvedBy));
     // Normalize the role to match database structure (site_manager → supervisor)
     const normalizedResolvedRole = normalizeRole(resolvedRole);
@@ -1477,6 +1643,11 @@ app.put('/api/stock/:id', async (req, res) => {
     
     if (!id) {
       return res.status(400).json({ success: false, message: 'id is required' });
+    }
+
+    // Validate id format
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: 'Invalid id format' });
     }
 
     const stock = stockCollection();

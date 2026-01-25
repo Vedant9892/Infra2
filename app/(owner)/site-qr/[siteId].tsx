@@ -2,8 +2,8 @@
  * Site QR Code Display Screen
  * Owner can view and share QR code for site enrollment
  */
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,12 +11,69 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { DESIGN } from '../../../constants/designSystem';
 import { SiteQRCode } from '../../../components/SiteQRCode';
-import { getSiteById } from '../../../lib/mock-api';
+import { API_BASE_URL } from '../../../constants/api';
+
+type Site = {
+  id: string;
+  name: string;
+  address?: string;
+  enrollmentCode?: string;
+};
 
 export default function SiteQRScreen() {
   const router = useRouter();
   const { siteId } = useLocalSearchParams<{ siteId: string }>();
-  const site = siteId ? getSiteById(siteId) : null;
+  const [site, setSite] = useState<Site | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (siteId) {
+      fetchSiteDetails();
+    }
+  }, [siteId]);
+
+  const fetchSiteDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/api/sites/${siteId}`);
+      const data = await response.json();
+      
+      if (data.success && data.site) {
+        setSite({
+          id: data.site.id || siteId,
+          name: data.site.name,
+          address: data.site.address,
+          enrollmentCode: data.site.enrollmentCode,
+        });
+      } else {
+        Alert.alert('Error', 'Failed to load site details');
+      }
+    } catch (error) {
+      console.error('Error fetching site:', error);
+      Alert.alert('Error', 'Failed to load site details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="dark" />
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#111" />
+          </TouchableOpacity>
+          <Text style={styles.title}>Site QR Code</Text>
+          <View style={styles.backBtn} />
+        </View>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={DESIGN.colors.primary} />
+          <Text style={styles.loadingText}>Loading site details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!site || !site.enrollmentCode) {
     return (
@@ -161,5 +218,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: DESIGN.colors.text.secondary,
     lineHeight: 20,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: DESIGN.spacing.xl,
+  },
+  loadingText: {
+    marginTop: DESIGN.spacing.md,
+    fontSize: 14,
+    color: DESIGN.colors.text.secondary,
   },
 });

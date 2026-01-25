@@ -285,6 +285,13 @@ export default function Sites() {
               <View style={styles.actionRow}>
                 <TouchableOpacity
                   style={styles.actionButton}
+                  onPress={() => router.push(`/(owner)/site-qr/${site.id}`)}
+                >
+                  <Ionicons name="qr-code-outline" size={18} color="#8B5CF6" />
+                  <Text style={styles.actionButtonText}>QR Code</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.actionButton}
                   onPress={() => router.push(`/(owner)/stock/${site.id}`)}
                 >
                   <Ionicons name="cube-outline" size={18} color="#8B5CF6" />

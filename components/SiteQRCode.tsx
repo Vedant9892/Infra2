@@ -3,13 +3,11 @@
  * Generates QR code for site enrollment (like Moodle enrollment code)
  */
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { DESIGN } from '../constants/designSystem';
-
-// Simple QR code representation using text/visual pattern
-// In production, use a proper QR library like react-native-qrcode-svg or expo-qr
+import QRCode from 'react-native-qrcode-svg';
 
 type SiteQRCodeProps = {
   siteId: string;
@@ -47,25 +45,21 @@ export function SiteQRCode({ siteId, enrollmentCode, siteName, address, onShare 
         <Text style={styles.title}>Site Enrollment QR Code</Text>
       </View>
 
-      {/* QR Code Visual Representation */}
+      {/* QR Code */}
       <View style={styles.qrContainer}>
-        <View style={styles.qrCode}>
-          {/* Simple visual QR representation */}
-          <View style={styles.qrGrid}>
-            {Array.from({ length: 12 }).map((_, i) => (
-              <View key={i} style={styles.qrRow}>
-                {Array.from({ length: 12 }).map((_, j) => (
-                  <View
-                    key={j}
-                    style={[
-                      styles.qrCell,
-                      (i + j) % 3 === 0 || (i * j) % 7 === 0 ? styles.qrCellFilled : null,
-                    ]}
-                  />
-                ))}
-              </View>
-            ))}
-          </View>
+        <View style={styles.qrCodeWrapper}>
+          <QRCode
+            value={qrData}
+            size={200}
+            color="#000000"
+            backgroundColor="#FFFFFF"
+            logo={undefined}
+            logoSize={30}
+            logoBackgroundColor="transparent"
+            logoMargin={2}
+            logoBorderRadius={15}
+            quietZone={10}
+          />
         </View>
         <Text style={styles.enrollmentCode}>{enrollmentCode}</Text>
         <Text style={styles.siteName}>{siteName}</Text>
@@ -120,29 +114,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: DESIGN.spacing.lg,
   },
-  qrCode: {
+  qrCodeWrapper: {
     backgroundColor: '#fff',
     padding: DESIGN.spacing.md,
     borderRadius: DESIGN.radius.md,
     marginBottom: DESIGN.spacing.md,
     borderWidth: 2,
     borderColor: DESIGN.colors.border,
-  },
-  qrGrid: {
-    width: 200,
-    height: 200,
-  },
-  qrRow: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  qrCell: {
-    flex: 1,
-    backgroundColor: '#fff',
-    margin: 1,
-  },
-  qrCellFilled: {
-    backgroundColor: '#000',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   enrollmentCode: {
     fontSize: 24,

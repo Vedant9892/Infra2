@@ -14,52 +14,95 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useUser } from '../../../contexts/UserContext';
 import { DESIGN } from '../../../constants/designSystem';
-import { joinSiteByCode } from '../../../lib/mock-api';
+import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../../constants/api';
 
 export default function ScanQRScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, setUser } = useUser();
   const [permission, requestPermission] = useCameraPermissions();
   const [joining, setJoining] = useState(false);
   const [scanned, setScanned] = useState(false);
 
   const handleBarCodeScanned = useCallback(
-    (evt: { data?: string; nativeEvent?: { data?: string } }) => {
-      if (scanned || joining) return;
+    async (evt: { data?: string; nativeEvent?: { data?: string } }) => {
+      if (scanned || joining) {
+        return;
+      }
+      
       const data = evt?.data ?? evt?.nativeEvent?.data;
       const code = (data || '').trim();
       if (!code) return;
+      
       setScanned(true);
       setJoining(true);
-      const uid = user?.id ?? 'u1';
-      const userRole = user?.role;
-      const result = joinSiteByCode(code, uid, userRole);
-      setJoining(false);
-      if (result.success) {
-        Alert.alert('Success', `Connected to ${result.site?.name ?? 'site'}`, [
-          { 
-            text: 'OK', 
-            onPress: () => {
-              // Navigate based on role
-              if (userRole === 'labour') {
-                router.replace('/(labour)/(tabs)/projects');
-              } else if (userRole === 'site_supervisor' || userRole === 'supervisor') {
-                router.replace('/(supervisor)/(tabs)/home');
-              } else if (userRole === 'junior_engineer' || userRole === 'senior_engineer' || userRole === 'engineer') {
-                router.replace('/(tabs)/home');
-              } else {
-                router.back();
-              }
-            }
+
+      try {
+        let enrollmentCode = code;
+        try {
+          const qrData = JSON.parse(code);
+          if (qrData.type === 'site_enrollment' && qrData.enrollmentCode) {
+            enrollmentCode = qrData.enrollmentCode;
+          }
+        } catch {
+          // Not JSON, use as plain code
+        }
+
+        const userId = user?.id;
+        if (!userId) {
+          setScanned(false);
+          setJoining(false);
+          Alert.alert('Error', 'User not authenticated. Please login again.');
+          return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}${LABOUR_ENDPOINTS.SITE.JOIN}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
           },
-        ]);
-      } else {
-        Alert.alert('Error', 'Invalid QR code. Please scan a valid site enrollment QR code.', [
-          { text: 'OK', onPress: () => { setScanned(false); } },
-        ]);
+          body: JSON.stringify({
+            siteCode: enrollmentCode,
+            userId: userId,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+          if (user && result.site) {
+            setUser({
+              ...user,
+              currentSiteId: result.site._id || result.site.id,
+              currentSiteName: result.site.name,
+              enrollmentStatus: 'active',
+            });
+          }
+          
+          const userRole = user?.role;
+          if (userRole === 'labour') {
+            router.replace('/(labour)/(tabs)/projects');
+          } else if (userRole === 'site_supervisor' || userRole === 'supervisor') {
+            router.replace('/(supervisor)/projects');
+          } else if (userRole === 'junior_engineer' || userRole === 'senior_engineer' || userRole === 'engineer') {
+            router.replace('/(tabs)/home');
+          } else {
+            router.back();
+          }
+        } else {
+          setScanned(false);
+          setJoining(false);
+          Alert.alert('Error', result.error || 'Invalid QR code. Please scan a valid site enrollment QR code.');
+        }
+      } catch (error: any) {
+        console.error('Error joining site:', error);
+        setScanned(false);
+        setJoining(false);
+        Alert.alert('Error', 'Failed to join site. Please try again.');
+      } finally {
+        setJoining(false);
       }
     },
-    [scanned, joining, user?.id, user?.role, router]
+    [scanned, joining, user, setUser, router]
   );
 
   if (!permission) {
@@ -107,6 +150,7 @@ export default function ScanQRScreen() {
             barcodeTypes: ['qr', 'org.iso.QRCode'],
           }}
           onBarcodeScanned={scanned || joining ? undefined : handleBarCodeScanned}
+          enableTorch={false}
         />
         <View style={styles.overlay}>
           <View style={styles.header}>

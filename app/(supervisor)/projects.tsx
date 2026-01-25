@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { DESIGN } from '../../constants/designSystem';
 import { useUser } from '../../contexts/UserContext';
-import { getSitesForOwner, getWorkLogs, getWorkPhotos, getAttendancePending, onDataChange } from '../../lib/mock-api';
+import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../constants/api';
 
 type Project = {
   id: string;
@@ -45,57 +45,54 @@ export default function SupervisorProjectsScreen() {
   const router = useRouter();
   const { user } = useUser();
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [reports, setReports] = useState<LabourReport[]>([]);
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [filter, setFilter] = useState<'all' | 'pending' | 'approved'>('all');
 
-  const loadProjects = useCallback(() => {
-    // Get all sites (supervisor can see all projects)
-    const sites = getSitesForOwner(user?.id ?? 'owner1');
-    
-    const projectsData: Project[] = sites.map((site) => {
-      const workLogs = getWorkLogs(site.id);
-      const workPhotos = getWorkPhotos(site.id);
-      const attendance = getAttendancePending(site.id);
-      
-      // Get unique labour IDs
-      const labourIds = new Set([
-        ...workLogs.map((w) => w.userId),
-        ...workPhotos.map((p) => p.userId || ''),
-        ...attendance.map((a) => a.userId),
-      ]);
-      labourIds.delete('');
-      
-      // Count pending reports
-      const pendingCount = attendance.filter((a) => a.status === 'pending').length;
-      
-      // Get last activity
-      const allTimestamps = [
-        ...workLogs.map((w) => new Date(w.timestamp)),
-        ...workPhotos.map((p) => new Date(p.timestamp)),
-        ...attendance.map((a) => new Date(a.timestamp)),
-      ];
-      const lastActivity = allTimestamps.length > 0 
-        ? new Date(Math.max(...allTimestamps.map((d) => d.getTime())))
-        : new Date();
-      
-      return {
-        id: site.id,
-        name: site.name,
-        address: site.address,
-        status: site.status as 'active' | 'completed',
-        labourCount: labourIds.size,
-        pendingReports: pendingCount,
-        lastActivity,
-      };
-    });
-    
-    setProjects(projectsData.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()));
+  const loadProjects = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      setProjects([]);
+      return;
+    }
+
+    try {
+      // Fetch enrolled sites for supervisor
+      const response = await fetch(`${API_BASE_URL}${LABOUR_ENDPOINTS.SITE.GET_MY_SITES}?userId=${user.id}`);
+      const sites = await response.json();
+
+      if (response.ok && Array.isArray(sites)) {
+        // Map sites to projects format
+        const projectsData: Project[] = sites.map((site: any) => ({
+          id: site._id || site.id,
+          name: site.name,
+          address: site.address,
+          status: (site.isActive === false ? 'completed' : 'active') as 'active' | 'completed',
+          labourCount: 0, // TODO: Fetch actual labour count from API
+          pendingReports: 0, // TODO: Fetch actual pending reports from API
+          lastActivity: new Date(), // TODO: Fetch actual last activity from API
+        }));
+        
+        setProjects(projectsData.sort((a, b) => b.lastActivity.getTime() - a.lastActivity.getTime()));
+      } else {
+        setProjects([]);
+      }
+    } catch (error) {
+      console.error('Error fetching supervisor projects:', error);
+      setProjects([]);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user?.id]);
 
   const loadReports = useCallback((projectId: string) => {
+    // TODO: Replace with real API calls for work logs, photos, and attendance
+    // For now, using mock data - reports functionality can be enhanced later
+    const { getWorkLogs, getWorkPhotos, getAttendancePending } = require('../../lib/mock-api');
     const workLogs = getWorkLogs(projectId);
     const workPhotos = getWorkPhotos(projectId);
     const attendance = getAttendancePending(projectId);
@@ -135,15 +132,15 @@ export default function SupervisorProjectsScreen() {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     loadProjects();
-    const unsubscribe = onDataChange(() => {
-      loadProjects();
-      if (selectedProject) {
-        loadReports(selectedProject.id);
-      }
-    });
-    return unsubscribe;
-  }, [loadProjects, selectedProject]);
+  }, [loadProjects]);
+  
+  useEffect(() => {
+    if (selectedProject) {
+      loadReports(selectedProject.id);
+    }
+  }, [selectedProject]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

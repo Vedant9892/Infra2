@@ -1,4 +1,4 @@
-/** Labour Attendance – mock API only. No backend. */
+/** Labour Attendance – with GPS geofence validation */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
@@ -21,10 +21,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '../../../contexts/UserContext';
 import { DESIGN } from '../../../constants/designSystem';
 import { getAttendanceApproved, markAttendance, onDataChange } from '../../../lib/mock-api';
 import { format } from 'date-fns';
+import { API_BASE_URL, LABOUR_ENDPOINTS } from '../../../constants/api';
 
 const { width, height } = Dimensions.get('window');
 
@@ -77,13 +79,73 @@ export default function LabourAttendanceScreen() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [recognizedLabour, setRecognizedLabour] = useState<RecognizedLabour | null>(null);
   const [showResultModal, setShowResultModal] = useState(false);
-  const cameraRef = useRef<CameraView>(null);
+  const [siteData, setSiteData] = useState<{ latitude: number; longitude: number; radius: number } | null>(null);
+  const [isWithinGeofence, setIsWithinGeofence] = useState<boolean | null>(null);
+  const [distanceFromSite, setDistanceFromSite] = useState<number | null>(null);
 
   const load = useCallback(() => {
     if (!siteId) return;
     const approved = getAttendanceApproved(siteId);
     setList(approved.map((a) => ({ id: a.id, address: a.address, timestamp: a.timestamp, status: a.status })));
   }, [siteId]);
+
+  // Calculate distance between two GPS coordinates (Haversine formula)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371e3; // Earth's radius in meters
+    const φ1 = (lat1 * Math.PI) / 180;
+    const φ2 = (lat2 * Math.PI) / 180;
+    const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+    const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+  };
+
+  // Fetch site details for geofence validation
+  useEffect(() => {
+    if (!siteId) return;
+
+    const fetchSiteDetails = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}${LABOUR_ENDPOINTS.SITE.GET_DETAILS(siteId)}`);
+        const data = await response.json();
+        
+        if (data.success && data.site) {
+          setSiteData({
+            latitude: parseFloat(data.site.latitude) || 0,
+            longitude: parseFloat(data.site.longitude) || 0,
+            radius: data.site.radius || 100,
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching site details:', error);
+      }
+    };
+
+    fetchSiteDetails();
+  }, [siteId]);
+
+  // Check geofence when location or site data changes
+  useEffect(() => {
+    if (!currentLocation || !siteData) {
+      setIsWithinGeofence(null);
+      return;
+    }
+
+    const distance = calculateDistance(
+      currentLocation.coords.latitude,
+      currentLocation.coords.longitude,
+      siteData.latitude,
+      siteData.longitude
+    );
+
+    setDistanceFromSite(distance);
+    setIsWithinGeofence(distance <= siteData.radius);
+  }, [currentLocation, siteData]);
 
   useEffect(() => {
     load();
@@ -98,8 +160,11 @@ export default function LabourAttendanceScreen() {
     // Request location permission and get current location
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission({ status } as Location.LocationPermissionResponse);
       if (status === 'granted') {
-        const loc = await Location.getCurrentPositionAsync({});
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
         setCurrentLocation(loc);
         
         // Get address from coordinates
@@ -165,24 +230,35 @@ export default function LabourAttendanceScreen() {
   };
 
   const handleCapture = async () => {
-    if (!cameraRef.current || isCapturing) return;
+    if (isCapturing) return;
 
     try {
       setIsCapturing(true);
       
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      });
-
-      if (!photo) {
-        Alert.alert('Error', 'Failed to capture image');
+      // Use ImagePicker for reliable photo capture
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permission is required');
         setIsCapturing(false);
         return;
       }
 
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.8,
+        cameraType: facing === 'front' ? ImagePicker.CameraType.front : ImagePicker.CameraType.back,
+      });
+
+      if (result.canceled || !result.assets || !result.assets[0]) {
+        setIsCapturing(false);
+        return;
+      }
+
+      const photoUri = result.assets[0].uri;
+
       // Recognize face
-      const recognized = await recognizeFace(photo.uri);
+      const recognized = await recognizeFace(photoUri);
       
       if (recognized) {
         setRecognizedLabour(recognized);
@@ -192,13 +268,28 @@ export default function LabourAttendanceScreen() {
       }
     } catch (error) {
       console.error('Capture error:', error);
-      Alert.alert('Error', 'Failed to capture image');
+      Alert.alert('Error', 'Failed to capture image. Please try again.');
     } finally {
       setIsCapturing(false);
     }
   };
 
   const handleMarkWithCamera = async () => {
+    // Check geofence first
+    if (isWithinGeofence === false) {
+      Alert.alert(
+        'Outside Site Area',
+        `You are ${Math.round(distanceFromSite || 0)}m away from the site. You must be within ${siteData?.radius || 100}m to mark attendance.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (isWithinGeofence === null) {
+      Alert.alert('Checking Location', 'Please wait while we verify your location...');
+      return;
+    }
+
     if (!cameraPermission) {
       const result = await requestCameraPermission();
       if (!result.granted) {
@@ -217,6 +308,21 @@ export default function LabourAttendanceScreen() {
 
     if (!currentLocation) {
       Alert.alert('Location Required', 'Please enable location services');
+      return;
+    }
+
+    // Check geofence
+    if (isWithinGeofence === false) {
+      Alert.alert(
+        'Outside Site Area',
+        `You are ${Math.round(distanceFromSite || 0)}m away from the site. You must be within ${siteData?.radius || 100}m to mark attendance.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (isWithinGeofence === null) {
+      Alert.alert('Checking Location', 'Please wait while we verify your location...');
       return;
     }
 
@@ -248,6 +354,21 @@ export default function LabourAttendanceScreen() {
 
     if (!currentLocation) {
       Alert.alert('Location Required', 'Please enable location services');
+      return;
+    }
+
+    // Check geofence
+    if (isWithinGeofence === false) {
+      Alert.alert(
+        'Outside Site Area',
+        `You are ${Math.round(distanceFromSite || 0)}m away from the site. You must be within ${siteData?.radius || 100}m to mark attendance.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    if (isWithinGeofence === null) {
+      Alert.alert('Checking Location', 'Please wait while we verify your location...');
       return;
     }
 
@@ -319,11 +440,28 @@ export default function LabourAttendanceScreen() {
       >
         <Text style={styles.hint}>GPS-fenced check-in. Choose how you want to mark your attendance.</Text>
         
+        {/* Geofence Status */}
+        {isWithinGeofence !== null && (
+          <View style={[styles.geofenceStatus, isWithinGeofence ? styles.geofenceStatusValid : styles.geofenceStatusInvalid]}>
+            <Ionicons 
+              name={isWithinGeofence ? "checkmark-circle" : "close-circle"} 
+              size={20} 
+              color={isWithinGeofence ? "#10B981" : "#EF4444"} 
+            />
+            <Text style={[styles.geofenceStatusText, isWithinGeofence ? styles.geofenceStatusTextValid : styles.geofenceStatusTextInvalid]}>
+              {isWithinGeofence 
+                ? `✓ Within site area (${Math.round(distanceFromSite || 0)}m from center)`
+                : `✗ Outside site area (${Math.round(distanceFromSite || 0)}m away, must be within ${siteData?.radius || 100}m)`
+              }
+            </Text>
+          </View>
+        )}
+        
         <View style={styles.modeContainer}>
           <TouchableOpacity
-            style={[styles.modeCard, styles.modeCardWithCamera]}
+            style={[styles.modeCard, styles.modeCardWithCamera, isWithinGeofence === false && styles.modeCardDisabled]}
             onPress={handleMarkWithCamera}
-            disabled={loading}
+            disabled={loading || isWithinGeofence === false}
           >
             <LinearGradient
               colors={['#3B82F6', '#2563EB']}
@@ -336,9 +474,9 @@ export default function LabourAttendanceScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.modeCard, styles.modeCardWithoutCamera]}
+            style={[styles.modeCard, styles.modeCardWithoutCamera, isWithinGeofence === false && styles.modeCardDisabled]}
             onPress={handleMarkWithoutCamera}
-            disabled={loading}
+            disabled={loading || isWithinGeofence === false}
           >
             <LinearGradient
               colors={['#10B981', '#059669']}
@@ -385,7 +523,6 @@ export default function LabourAttendanceScreen() {
           <SafeAreaView style={styles.cameraContainer} edges={['top']}>
             <StatusBar style="light" />
             <CameraView
-              ref={cameraRef}
               style={styles.camera}
               facing={facing}
               mode="picture"
@@ -879,5 +1016,33 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#6B7280',
+  },
+  geofenceStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: DESIGN.spacing.md,
+    borderRadius: DESIGN.radius.md,
+    marginBottom: DESIGN.spacing.md,
+  },
+  geofenceStatusValid: {
+    backgroundColor: '#D1FAE5',
+  },
+  geofenceStatusInvalid: {
+    backgroundColor: '#FEE2E2',
+  },
+  geofenceStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  geofenceStatusTextValid: {
+    color: '#059669',
+  },
+  geofenceStatusTextInvalid: {
+    color: '#DC2626',
+  },
+  modeCardDisabled: {
+    opacity: 0.5,
   },
 });

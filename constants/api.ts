@@ -10,7 +10,7 @@ export const API_BASE_URL = Platform.select({
   // For Android emulator and real devices, use IP
   android: `http://${DEV_IP}:3001`,
   // For web
-  default: 'http://localhost:3001',
+  default: 'http://172.16.34.187:3001',
 });
 
 console.log('🌐 API Base URL:', API_BASE_URL);

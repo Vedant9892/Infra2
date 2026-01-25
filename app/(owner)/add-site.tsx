@@ -14,6 +14,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import SiteMap from '../../components/SiteMap';
+import { useUser } from '../../contexts/UserContext';
+import { API_BASE_URL } from '../../constants/api';
 
 type Site = {
   id: string;
@@ -34,7 +36,9 @@ import { useFormStorage } from '../../lib/use-form-storage';
 
 export default function SiteRegistration() {
   const router = useRouter();
+  const { user } = useUser();
   const [step, setStep] = useState(1);
+  const [registering, setRegistering] = useState(false);
   const [siteData, setSiteDataField, clearSiteForm] = useFormStorage('site-registration', {
     name: '',
     location: '',
@@ -89,38 +93,76 @@ export default function SiteRegistration() {
     }
   };
 
-  const handleRegisterSite = () => {
-    const newSite: Site = {
-      id: Date.now().toString(),
-      name: siteData.name,
-      location: siteData.location,
-      latitude: selectedLocation.latitude,
-      longitude: selectedLocation.longitude,
-      radius: radius,
-      address: siteData.address,
-      pincode: siteData.pincode,
-      projectType: siteData.projectType,
-      startDate: new Date(),
-      estimatedEndDate: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000), // 6 months
-      budget: siteData.budget,
-    };
+  const handleRegisterSite = async () => {
+    // Validate required fields
+    if (!siteData.name || !siteData.location) {
+      Alert.alert('Error', 'Please fill in site name and location');
+      return;
+    }
 
-    // TODO: Save to backend/database
-    console.log('Registering site:', newSite);
+    if (!user?.id) {
+      Alert.alert('Error', 'User not authenticated. Please login again.');
+      return;
+    }
 
-    Alert.alert(
-      'Success',
-      'Site registered successfully! Workers can now mark attendance within the specified area.',
-      [
-        {
-          text: 'OK',
-          onPress: async () => {
-            await clearSiteForm(); // Clear stored inputs after successful registration
-            router.replace('/(owner)/sites');
-          },
+    setRegistering(true);
+    try {
+      // Prepare site data
+      const sitePayload = {
+        ownerId: user.id, // Associate site with current owner
+        name: siteData.name,
+        location: siteData.location,
+        address: siteData.address || siteData.location,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude,
+        radius: radius,
+        projectType: siteData.projectType || 'residential',
+        budget: siteData.budget || null,
+        pincode: siteData.pincode || null,
+      };
+
+      console.log('📡 Creating site with ownerId:', user.id);
+      console.log('📦 Site payload:', sitePayload);
+
+      // Call API to create site
+      const response = await fetch(`${API_BASE_URL}/api/sites`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-      ]
-    );
+        body: JSON.stringify(sitePayload),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || data.error || 'Failed to create site');
+      }
+
+      console.log('✅ Site created successfully:', data.site);
+
+      Alert.alert(
+        'Success',
+        `Site "${siteData.name}" registered successfully! Workers can now mark attendance within the specified area.`,
+        [
+          {
+            text: 'OK',
+            onPress: async () => {
+              await clearSiteForm(); // Clear stored inputs after successful registration
+              router.replace('/(owner)/sites');
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('❌ Error creating site:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Failed to register site. Please try again.'
+      );
+    } finally {
+      setRegistering(false);
+    }
   };
 
   return (
@@ -310,9 +352,21 @@ export default function SiteRegistration() {
                 <Text style={styles.backButtonText}>Back</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.registerButton} onPress={handleRegisterSite}>
-                <Text style={styles.registerButtonText}>Register Site</Text>
-                <Ionicons name="checkmark" size={20} color="#fff" />
+              <TouchableOpacity 
+                style={[styles.registerButton, registering && styles.registerButtonDisabled]} 
+                onPress={handleRegisterSite}
+                disabled={registering}
+              >
+                {registering ? (
+                  <>
+                    <Text style={styles.registerButtonText}>Registering...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.registerButtonText}>Register Site</Text>
+                    <Ionicons name="checkmark" size={20} color="#fff" />
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -586,5 +640,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#fff',
+  },
+  registerButtonDisabled: {
+    opacity: 0.6,
   },
 });
