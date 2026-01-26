@@ -76,7 +76,8 @@ export async function markAttendance(req: Request, res: Response) {
       });
     }
 
-    // Verify GPS is within radius
+    // Verify GPS is within radius and determine auto-approval
+    let isWithinRadius = false;
     if (siteData.latitude && siteData.longitude && siteData.radius) {
       const lat1 = parseFloat(siteData.latitude.toString());
       const lon1 = parseFloat(siteData.longitude.toString());
@@ -94,7 +95,8 @@ export async function markAttendance(req: Request, res: Response) {
         });
       }
       
-      console.log(`✅ GPS verified: ${Math.round(distance)}m from site center (radius: ${radius}m)`);
+      isWithinRadius = true;
+      console.log(`✅ GPS verified: ${Math.round(distance)}m from site center (radius: ${radius}m) - Auto-approved`);
     }
 
     // Create attendance record
@@ -119,7 +121,11 @@ export async function markAttendance(req: Request, res: Response) {
       // Store MongoDB siteId as string in location field for reference
       // siteId field in PostgreSQL may be null if site doesn't exist there
       shiftSlot: shiftSlot,
-      approvalStatus: 'pending',
+      // Auto-approve if GPS is within site radius (already verified above)
+      // If within radius, mark as approved automatically - no supervisor approval needed
+      approvalStatus: isWithinRadius ? 'approved' : 'pending',
+      approvedBy: isWithinRadius ? null : null, // Auto-approved when within radius
+      approvedAt: isWithinRadius ? now : null,
       isSynced: true,
     }).returning();
 
@@ -140,10 +146,13 @@ export async function markAttendance(req: Request, res: Response) {
       location: record.location,
     };
 
+    const isAutoApproved = formattedRecord.approvalStatus === 'approved';
     res.status(201).json({
       success: true,
       attendance: formattedRecord,
-      message: 'Attendance marked successfully. Waiting for supervisor approval.',
+      message: isAutoApproved 
+        ? 'Attendance marked successfully and automatically approved (within site radius).'
+        : 'Attendance marked successfully. Waiting for supervisor approval.',
     });
   } catch (error: any) {
     if (error instanceof z.ZodError) {

@@ -72,4 +72,9 @@ export const DESIGN = {
     lg: 16,
     xl: 24,
   },
+  
+  // Floating tab bar config
+  floatingTabBar: {
+    scrollPaddingBottom: 120, // Padding for scroll content when using floating tab bar
+  },
 };
