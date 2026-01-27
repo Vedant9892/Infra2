@@ -89,6 +89,13 @@ export const FACE_RECALL_ENDPOINTS = {
 };
 
 
+export const CONSUMPTION_VARIANCE_ENDPOINTS = {
+  GET_ALL: '/api/consumption-variance',
+  GET_BY_ID: (id: number) => `/api/consumption-variance/${id}`,
+  CREATE: '/api/consumption-variance',
+  UPDATE_ACTUAL: (id: number) => `/api/consumption-variance/${id}/actual`,
+};
+
 
 export const PERMIT_ENDPOINTS = {
   GET_ALL: '/api/permits',
