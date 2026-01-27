@@ -116,3 +116,10 @@ export const PETTY_CASH_ENDPOINTS = {
   APPROVE: (id: number) => `/api/petty-cash/${id}/approve`,
   REJECT: (id: number) => `/api/petty-cash/${id}/reject`,
 };
+
+export const CONSUMPTION_VARIANCE_ENDPOINTS = {
+  GET_ALL: '/api/consumption-variance',
+  GET_BY_ID: (id: number) => `/api/consumption-variance/${id}`,
+  CREATE: '/api/consumption-variance',
+  UPDATE_ACTUAL: (id: number) => `/api/consumption-variance/${id}/actual`,
+};
