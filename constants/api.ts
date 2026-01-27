@@ -88,17 +88,7 @@ export const FACE_RECALL_ENDPOINTS = {
   GET_ATTENDANCE: '/api/face-attendance',
 };
 
-export const TOOL_ENDPOINTS = {
-  GET_ALL: '/api/tools',
-  GET_BY_ID: (id: number) => `/api/tools/${id}`,
-  GET_BY_QR: (qrCode: string) => `/api/tools/qr/${qrCode}`,
-  CREATE: '/api/tools',
-  REQUEST: '/api/tools/request',
-  GET_REQUESTS: '/api/tools/requests',
-  APPROVE_REQUEST: (id: number) => `/api/tools/requests/${id}/approve`,
-  RETURN: (id: number) => `/api/tools/requests/${id}/return`,
-  SCAN_QR: '/api/tools/scan-qr',
-};
+
 
 export const PERMIT_ENDPOINTS = {
   GET_ALL: '/api/permits',
