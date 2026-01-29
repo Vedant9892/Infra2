@@ -1,15 +1,15 @@
 // constants/api.ts
 import { Platform } from 'react-native';
 
-// Replace this with YOUR computer's IP address
-const DEV_IP = '172.16.34.187'; // ← Change this to your IP from ipconfig
+
+const DEV_IP = '172.16.34.187';
 
 export const API_BASE_URL = Platform.select({
-  // For iOS simulator, localhost works
+
   ios: __DEV__ ? `http://${DEV_IP}:3001` : `http://${DEV_IP}:3001`,
-  // For Android emulator and real devices, use IP
+
   android: `http://${DEV_IP}:3001`,
-  // For web
+
   default: 'http://172.16.34.187:3001',
 });
 
