@@ -203,17 +203,3 @@ if __name__ == "__main__":
             else:
                 print(f"✗ No embeddings extracted for '{person_name}'")
     
-    print(f"\n{'='*70}")
-    print(f"ENHANCED TRAINING COMPLETE!")
-    print(f"{'='*70}")
-    print(f"Original images processed: {total_original_images}")
-    print(f"Total embeddings saved: {total_saved}")
-    print(f"Augmentation factor: {total_saved/total_original_images if total_original_images > 0 else 0:.1f}x")
-    print(f"Trained models location: {TRAINED_MODEL_BASE}")
-    print(f"{'='*70}")
-    print("\nBENEFITS OF AUGMENTATION:")
-    print("  ✓ More robust recognition in different lighting")
-    print("  ✓ Better handling of head tilts and angles")
-    print("  ✓ Improved accuracy with limited training images")
-    print("  ✓ Reduced overfitting")
-    print(f"{'='*70}")
