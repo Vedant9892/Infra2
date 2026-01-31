@@ -5,6 +5,110 @@ from mtcnn import MTCNN
 from keras_facenet import FaceNet
 import logging
 
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def read_person_info(person_dir, person_folder_name):
+    """Read person info from .txt file in their folder"""
+    txt_files = [f for f in os.listdir(person_dir) if f.endswith('.txt')]
+    
+    if not txt_files:
+        return person_folder_name, "N/A"
+    
+    txt_file = os.path.join(person_dir, txt_files[0])
+    
+    try:
+        with open(txt_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        name = "N/A"
+        age = "N/A"
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('NAME:'):
+                name = line.split('NAME:')[1].strip()
+            elif line.startswith('AGE:'):
+                age = line.split('AGE:')[1].strip()
+        
+        return name, age
+    except Exception as e:
+        logging.error(f"Error reading info file {txt_file}: {e}")
+        return person_folder_name, "N/A"
+
+def augment_image(image):
+    """Apply data augmentation to increase training data
+    
+    Creates variations of the image to make training more robust
+    """
+    augmented_images = []
+    
+    # Original image
+    augmented_images.append(image)
+    
+    # Horizontal flip (mirror)
+    flipped = cv2.flip(image, 1)
+    augmented_images.append(flipped)
+    
+    # Brightness adjustments
+    # Brighten
+    bright = cv2.convertScaleAbs(image, alpha=1.2, beta=20)
+    augmented_images.append(bright)
+    
+    # Darken
+    dark = cv2.convertScaleAbs(image, alpha=0.8, beta=-20)
+    augmented_images.append(dark)
+    
+    # Slight rotation (-5 to +5 degrees)
+    height, width = image.shape[:2]
+    center = (width // 2, height // 2)
+    
+    # Rotate +5 degrees
+    matrix_plus = cv2.getRotationMatrix2D(center, 5, 1.0)
+    rotated_plus = cv2.warpAffine(image, matrix_plus, (width, height))
+    augmented_images.append(rotated_plus)
+    
+    # Rotate -5 degrees
+    matrix_minus = cv2.getRotationMatrix2D(center, -5, 1.0)
+    rotated_minus = cv2.warpAffine(image, matrix_minus, (width, height))
+    augmented_images.append(rotated_minus)
+    
+    return augmented_images
+
+if __name__ == "__main__":
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    # Consistent with FaceDetection-CNN: FACE_IMAGES + LabourImages for training
+    IMAGE_SOURCES = [
+        os.path.join(BASE_DIR, "FACE_IMAGES"),
+        os.path.join(BASE_DIR, "LabourImages"),
+    ]
+    TRAINED_MODEL_BASE = os.path.join(BASE_DIR, "Trained_Model")
+    
+    existing_sources = [d for d in IMAGE_SOURCES if os.path.exists(d) and os.path.isdir(d)]
+    if not existing_sources:
+        print("Error: No image directories found. Create at least one of: FACE_IMAGES, LabourImages")
+        exit(1)
+
+    print("Scanning image sources: " + ", ".join(os.path.basename(d) for d in existing_sources))
+    print("\n" + "="*70)
+    print("ENHANCED TRAINING MODE - With Data Augmentation")
+    print("="*70)
+    print("Sources: FACE_IMAGES (general) + LabourImages (labour faces)")
+    print("Each image will be augmented to create 6 variations:")
+    print("  1. Original")
+    print("  2. Horizontal flip")
+    print("  3. Brightened")
+    print("  4. Darkened")
+    print("  5. Rotated +5°")
+    print("  6. Rotated -5°")
+    print("="*70 + "\n")
+    
+    # Initialize models once
+    detector = MTCNN()
+    embedder = FaceNet()
+    
+    total_saved = 0
+    total_original_images = 0
     
     # Process each image source (FACE_IMAGES, LabourImages)
     for images_dir in existing_sources:
