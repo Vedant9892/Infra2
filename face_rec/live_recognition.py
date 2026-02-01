@@ -185,12 +185,7 @@ def recognize_faces():
         frame_height, frame_width = frame.shape[:2]
         
         # Create semi-transparent overlay for text background (bottom-right)
-        overlay = frame.copy()
-        overlay_width = 280
-        overlay_height = 50
-        cv2.rectangle(overlay, (frame_width - overlay_width, frame_height - overlay_height), 
-                     (frame_width, frame_height), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+
         
         # Display GPS and DateTime in bottom-right corner (smaller text)
         y_offset = frame_height - 32
