@@ -89,19 +89,7 @@ if __name__ == "__main__":
         print("Error: No image directories found. Create at least one of: FACE_IMAGES, LabourImages")
         exit(1)
 
-    print("Scanning image sources: " + ", ".join(os.path.basename(d) for d in existing_sources))
-    print("\n" + "="*70)
-    print("ENHANCED TRAINING MODE - With Data Augmentation")
-    print("="*70)
-    print("Sources: FACE_IMAGES (general) + LabourImages (labour faces)")
-    print("Each image will be augmented to create 6 variations:")
-    print("  1. Original")
-    print("  2. Horizontal flip")
-    print("  3. Brightened")
-    print("  4. Darkened")
-    print("  5. Rotated +5°")
-    print("  6. Rotated -5°")
-    print("="*70 + "\n")
+
     
     # Initialize models once
     detector = MTCNN()
